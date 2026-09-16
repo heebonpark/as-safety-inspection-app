@@ -129,13 +129,11 @@
   .photo-box input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
   .photo-clear{border:none;background:transparent;color:var(--red);font-size:11px;font-weight:700;text-decoration:underline;padding:0;align-self:center;}
 
-  .siggrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
-  @media (max-width:640px){ .siggrid{grid-template-columns:1fr;} }
-  .sigbox{border:1px solid var(--line);border-radius:8px;padding:10px 12px;}
-  .sigbox label.mini{display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
-  .sigpad{border:1px dashed var(--line);border-radius:4px;background:#fdfefe;width:100%;height:56px;display:block;}
-  canvas.sigpad{touch-action:none;}
-  .sig-clear{border:none;background:transparent;color:var(--ink-soft);font-size:10px;text-decoration:underline;padding:0;margin-top:4px;}
+  .remarks-box{margin-bottom:14px;border:1px solid var(--line);border-top:none;border-radius:0 0 6px 6px;padding:10px 12px;}
+  .remarks-box label.mini{display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
+  td.sig-inline{display:flex;align-items:center;gap:4px;}
+  td.sig-inline input{flex:1;min-width:0;}
+  td.sig-inline .ins-mark{flex:none;color:var(--ink-soft);}
 
   textarea.wide{width:100%;min-height:44px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12.8px;resize:vertical;}
   textarea.wide:focus{outline:none;border-color:var(--brand);}
@@ -171,21 +169,18 @@
   #print-all-root .print-page{page-break-after:always;margin-bottom:24px;}
   #print-all-root .print-page:last-child{page-break-after:auto;}
 
-  /* 인쇄 스타일 — 여러 번의 시행착오 끝에, 그동안 "인쇄 버튼이 안 눌린다"던 문제의
-     진짜 원인이 CSS(display:table 등)가 아니라 아이폰 Safari가 반복 테스트 중인
-     이 사이트를 스팸성 팝업으로 오인해 조용히 막아버린 것(사이트 데이터를 지우거나
-     프라이빗 모드로 열면 정상 동작)이었다는 게 확인됐다. 즉 flex/grid를 피해야 할
-     이유가 없었다 — 그래서 화면(특히 "보기" 화면)과 최대한 똑같이 보이도록 인쇄
-     전용 스타일을 다시 최소한으로 단순화했다. 체크리스트 표 행 높이만 요청대로
-     조금 줄이고, 나머지(사진 크기, 비고/서명 배치 등)는 화면 그대로 둔다. */
-  @page{ size:A4; margin:8mm; }
+  /* 인쇄 스타일 — 서명판을 없애면서 확보한 공간과, 표 행 높이·사진 크기를 함께
+     줄여서 A4 한 장에 들어가도록 한다(사진이 화면용 4:3 비율 그대로 인쇄되면
+     그것만으로 한 페이지 대부분을 차지해서, 표 행 높이만 줄여서는 한 장에 담기
+     어렵다 — 그래서 사진 박스 높이도 인쇄용으로 고정값을 준다). */
+  @page{ size:A4; margin:7mm; }
   @media print{
     body{background:#fff;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
     .no-print{display:none !important;}
     main{padding:0;display:block;}
     .shell{max-width:none;}
     .sheet{box-shadow:none;border:none;border-radius:0;padding:0;}
-    .sig-clear,.photo-clear{display:none !important;}
+    .photo-clear{display:none !important;}
     input::placeholder, textarea::placeholder{color:transparent !important;}
     input[type=text], textarea{border:none !important;background:transparent !important;overflow:visible !important;}
     table.check td.action input{border-bottom:1px dashed #999 !important;}
@@ -193,15 +188,25 @@
     .formtitle-sub{display:none !important;}
     table{page-break-inside:auto;}
     tr, td, th, .section-label, .photo-cell{page-break-inside:avoid;}
-    table.grid th, table.grid td, table.check th, table.check td, .sigbox, textarea.wide{border:1px solid #333 !important;}
-    .sigbox{border-radius:0 !important;}
+    table.grid th, table.grid td, table.check th, table.check td, textarea.wide{border:1px solid #333 !important;}
     .photo-box{border:1px solid #333 !important;}
     .photo-box input[type=file]{display:none !important;}
 
-    /* 체크리스트 표 행 높이만 요청대로 화면보다 조금 줄인다(글자 12.3px→11px,
-       위아래 여백도 줄임). 그 외 헤더 표·사진·비고/서명은 화면과 동일하게 둔다. */
-    table.check th, table.check td{font-size:11px;padding:4px 6px;}
-    table.check td.item .note{font-size:9.5px;}
+    .sheet h2.formtitle{font-size:15px;margin:0 0 3px;}
+    .section-label{font-size:10.5px;padding:3px 8px;margin-top:5px;}
+    table.grid th, table.grid td{font-size:10px;padding:3px 6px;}
+    table.check th, table.check td{font-size:9.5px;padding:3px 5px;line-height:1.2;}
+    table.check td.item .note{font-size:8.3px;}
+    .result-opt{font-size:9px;}
+    table.check td.action input{font-size:9px;}
+    .photo-caption{font-size:9px !important;padding:2px !important;}
+    .photo-cell{padding:5px;gap:3px;}
+    .photo-cell .plabel{font-size:9px;}
+    .photo-box{aspect-ratio:auto !important;height:42mm !important;}
+    .remarks-box{padding:5px 8px;margin-bottom:6px;}
+    .remarks-box label.mini{font-size:9px;margin-bottom:2px;}
+    textarea.wide{min-height:16mm;font-size:9.5px;padding:3px 5px;}
+    .meta-footer{font-size:8px;margin-top:2px;}
   }
 
   @media (max-width:720px){
@@ -342,7 +347,6 @@ function blankForm(prefill){
     inspectDate: todayStr(),
     inspectOrg: (prefill && prefill.branch) || "",
     inspectorName: (prefill && prefill.name) || "",
-    inspectorSig: "",
     contractNo: "",
     companyName: "",
     siteAddress: "",
@@ -495,35 +499,11 @@ function renderFormInto(root, opts){
     ${!fromAdmin && state.role==='inspector' ? `<div class="panel" id="mine-panel" style="display:none;"></div>` : ''}
   `;
   // 인쇄/제출 같은 핵심 버튼은 아래 시트(양식 본문) 렌더링보다 먼저 연결한다 — 혹시
-  // 시트 쪽 렌더링(체크리스트·사진·서명판)에서 예외가 나더라도 인쇄 버튼 자체는 항상
-  // 눌리게 하기 위함이다("작성 화면에서만 인쇄가 안 눌린다"는 문제의 재발 방지책).
+  // 시트 쪽 렌더링(체크리스트·사진)에서 예외가 나더라도 인쇄 버튼 자체는 항상
+  // 눌리게 하기 위함이다. print() 자체도 try/catch로 감싸 실패 시 화면에 표시한다.
   document.getElementById('btn-print').onclick = ()=>{
-    // "보기" 화면(서명이 정적 <img>)에서는 인쇄가 되는데 "작성" 화면(서명이 살아있는
-    // <canvas>)에서는 인쇄 버튼이 아예 반응하지 않는다는 제보가 반복됐다 — 둘의 유일한
-    // 구조적 차이가 이 캔버스라, 일부 브라우저(특히 아이폰 사파리)가 <canvas>가 있는
-    // 페이지의 인쇄 자체를 조용히 막는 것으로 보인다. 인쇄를 누른 순간에만 서명판을
-    // (실제 "보기" 화면과 똑같이) 정적 이미지로 바꿔치기한 뒤 인쇄하고, 인쇄 창이
-    // 닫히면(afterprint) 다시 그림 가능한 캔버스로 되돌려 계속 서명할 수 있게 한다.
-    // 원인이 캔버스가 아닌 다른 무언가일 가능성에 대비해, print() 자체를 try/catch로
-    // 감싸 실패하면 최소한 화면에 표시라도 되게 한다(예전엔 실패해도 아무 반응이
-    // 없어서 원인을 알 방법이 없었다).
     try{
-      const sigCell = document.getElementById('sig-cell');
-      const canvas = sigCell ? sigCell.querySelector('canvas') : null;
-      if(!canvas){ window.print(); return; }
-      const dataUrl = canvas.toDataURL('image/png');
-      f.inspectorSig = dataUrl;
-      sigCell.innerHTML = dataUrl ? `<img class="sigpad" src="${dataUrl}" style="object-fit:contain;">` : `<div class="sigpad"></div>`;
-      let restored = false;
-      const restore = ()=>{
-        if(restored) return;
-        restored = true;
-        setupSigPad(sigCell, f, readOnly);
-        window.removeEventListener('afterprint', restore);
-      };
-      window.addEventListener('afterprint', restore);
       window.print();
-      setTimeout(restore, 15000); // afterprint를 못 받는 환경 대비 안전장치
     }catch(e){
       console.error("인쇄 실패", e);
       toast("인쇄를 여는 중 오류가 발생했습니다: " + (e && e.message ? e.message : e));
@@ -576,7 +556,7 @@ function renderMineListInto(root){
   });
 }
 
-function sheetOuterHTML(f, dis, sigImgHTML){
+function sheetOuterHTML(f, dis){
   return `
     <h2 class="formtitle">AS 및 공사현장 안전점검 일일 보고</h2>
     <div class="formtitle-sub">※ 점검결과 항목에 체크, 미흡 시 보완사항 기재</div>
@@ -590,7 +570,7 @@ function sheetOuterHTML(f, dis, sigImgHTML){
       </tr>
       <tr>
         <th>점검기관(부서)</th><td><input type="text" data-field="inspectOrg" value="${esc(f.inspectOrg)}" ${dis}></td>
-        <th class="req">점검자</th><td><input type="text" data-field="inspectorName" value="${esc(f.inspectorName)}" ${dis}></td>
+        <th class="req">점검자</th><td class="sig-inline"><input type="text" data-field="inspectorName" value="${esc(f.inspectorName)}" ${dis}><span class="ins-mark">(인)</span></td>
         <th>계약번호</th><td><input type="text" data-field="contractNo" value="${esc(f.contractNo)}" ${dis}></td>
       </tr>
       <tr>
@@ -627,16 +607,10 @@ function sheetOuterHTML(f, dis, sigImgHTML){
       ${CHECK_ITEMS.map((it,i)=>photoCellHTML(it, i, f.checklist[i].photo, dis)).join("")}
     </div>
 
-    <span class="section-label">비고 / 점검자 서명</span>
-    <div class="siggrid" style="margin-top:0;border:1px solid var(--line);border-top:none;border-radius:0 0 6px 6px;padding:10px 12px;">
-      <div>
-        <label class="mini" style="display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;">비고</label>
-        <textarea class="wide" data-field="remarks" style="min-height:56px;" ${dis}>${esc(f.remarks)}</textarea>
-      </div>
-      <div class="sigbox" style="border:none;padding:0;">
-        <label class="mini">점검자 서명</label>
-        <div class="sigcell" id="sig-cell">${sigImgHTML || ''}</div>
-      </div>
+    <span class="section-label">비고</span>
+    <div class="remarks-box" style="margin-top:0;">
+      <label class="mini">비고</label>
+      <textarea class="wide" data-field="remarks" style="min-height:40px;" ${dis}>${esc(f.remarks)}</textarea>
     </div>
 
     <div class="meta-footer">
@@ -667,9 +641,8 @@ function selectHTML(field, list, value, dis){
 
 function renderSheet(el, f, readOnly){
   const dis = readOnly ? 'disabled' : '';
-  el.innerHTML = sheetOuterHTML(f, dis, '');
+  el.innerHTML = sheetOuterHTML(f, dis);
   bindFormInputs(el, f, readOnly);
-  setupSigPad(el.querySelector('#sig-cell'), f, readOnly);
 }
 
 function bindFormInputs(el, f, readOnly){
@@ -703,42 +676,6 @@ function bindFormInputs(el, f, readOnly){
       renderSheet(el, f, readOnly);
     });
   });
-}
-
-function setupSigPad(cellEl, f, readOnly){
-  if(readOnly){
-    cellEl.innerHTML = f.inspectorSig ? `<img class="sigpad" src="${f.inspectorSig}" style="object-fit:contain;">` : `<div class="sigpad"></div>`;
-    return;
-  }
-  cellEl.innerHTML = `<canvas class="sigpad" width="300" height="112"></canvas><button type="button" class="sig-clear">지우고 다시 서명</button>`;
-  const canvas = cellEl.querySelector('canvas');
-  const ctx = canvas.getContext('2d');
-  ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.strokeStyle = '#1b2a2e';
-  if(f.inspectorSig){
-    const img = new Image();
-    img.onload = ()=>ctx.drawImage(img,0,0,canvas.width,canvas.height);
-    img.src = f.inspectorSig;
-  }
-  let drawing=false, last=null;
-  function pos(e){
-    const r = canvas.getBoundingClientRect();
-    const cx = (e.touches?e.touches[0].clientX:e.clientX) - r.left;
-    const cy = (e.touches?e.touches[0].clientY:e.clientY) - r.top;
-    return {x:cx*canvas.width/r.width, y:cy*canvas.height/r.height};
-  }
-  function start(e){ e.preventDefault(); drawing=true; last=pos(e); }
-  function move(e){ if(!drawing) return; e.preventDefault(); const p=pos(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; }
-  function end(){ if(!drawing) return; drawing=false; f.inspectorSig = canvas.toDataURL('image/png'); }
-  canvas.addEventListener('mousedown', start);
-  canvas.addEventListener('mousemove', move);
-  window.addEventListener('mouseup', end);
-  canvas.addEventListener('touchstart', start, {passive:false});
-  canvas.addEventListener('touchmove', move, {passive:false});
-  canvas.addEventListener('touchend', end);
-  cellEl.querySelector('.sig-clear').onclick = ()=>{
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    f.inspectorSig = "";
-  };
 }
 
 async function submitForm(){
@@ -847,14 +784,6 @@ function exportCSV(){
   downloadBlob(new Blob([csvContentFor(rows)], {type:'text/csv;charset=utf-8;'}), `AS_안전점검_${todayStr()}.csv`);
 }
 
-// 서명 이미지를 읽기전용 HTML로 바로 문자열 조립할 때 쓰는 조각 — 전체 인쇄와 ZIP
-// 내보내기 둘 다, 나중에 스크립트로 채워 넣지 않고 sheetOuterHTML의 세 번째 인자로
-// 바로 완성된 마크업을 넘긴다(ZIP으로 저장된 개별 HTML 파일은 스크립트 없이 열어도
-// 서명이 바로 보여야 하므로 더 안전하다).
-function sigStaticHTML(f){
-  return f.inspectorSig ? `<img class="sigpad" src="${f.inspectorSig}" style="object-fit:contain;">` : `<div class="sigpad"></div>`;
-}
-
 function printAllRecords(){
   const rows = getFilteredRecords();
   if(rows.length===0){ toast("인쇄할 내역이 없습니다."); return; }
@@ -864,7 +793,7 @@ function printAllRecords(){
   rows.forEach(r=>{
     const div = document.createElement('div');
     div.className = 'sheet print-page';
-    div.innerHTML = sheetOuterHTML(r, 'disabled', sigStaticHTML(r));
+    div.innerHTML = sheetOuterHTML(r, 'disabled');
     container.appendChild(div);
   });
   document.body.appendChild(container);
@@ -881,7 +810,7 @@ function printAllRecords(){
 function buildStaticDocument(f){
   const styleTag = document.querySelector('style');
   const styleText = styleTag ? styleTag.textContent : '';
-  const body = sheetOuterHTML(f, 'disabled', sigStaticHTML(f));
+  const body = sheetOuterHTML(f, 'disabled');
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
 <title>${esc(f.companyName||'AS 안전점검')} ${esc(f.inspectDate||'')}</title>
 <style>${styleText}
