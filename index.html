@@ -137,8 +137,8 @@
   td.sig-inline input{flex:1;min-width:0;}
   td.sig-inline .ins-mark{flex:none;color:var(--ink-soft);}
 
-  textarea.wide{width:100%;min-height:44px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12.8px;resize:vertical;}
-  textarea.wide:focus{outline:none;border-color:var(--brand);}
+  textarea.wide{width:100%;min-height:44px;border:none;background:transparent;padding:0;font-size:12.8px;resize:vertical;}
+  textarea.wide:focus{outline:none;}
 
   .meta-footer{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;}
 
@@ -190,7 +190,7 @@
     .formtitle-sub{display:none !important;}
     table{page-break-inside:auto;}
     tr, td, th, .section-label, .photo-cell, .remarks-box{page-break-inside:avoid;}
-    table.grid th, table.grid td, table.check th, table.check td, textarea.wide{border:1px solid #333 !important;}
+    table.grid th, table.grid td, table.check th, table.check td{border:1px solid #333 !important;}
     .photo-box{border:1px solid #333 !important;}
     .photo-caption, .remarks-box{border-color:#333 !important;}
     .photo-box input[type=file]{display:none !important;}
@@ -205,9 +205,9 @@
     .photo-caption{font-size:9px !important;padding:2px !important;}
     .photo-cell{padding:5px;gap:3px;}
     .photo-cell .plabel{font-size:9px;}
-    .photo-box{aspect-ratio:auto !important;height:56mm !important;}
+    .photo-box{aspect-ratio:auto !important;height:60mm !important;}
     .remarks-box{padding:5px 8px;margin-bottom:6px;}
-    textarea.wide{min-height:16mm;font-size:9.5px;padding:3px 5px;}
+    textarea.wide{min-height:16mm;font-size:9.5px;padding:0;}
     .meta-footer{font-size:8px;margin-top:2px;}
   }
 
