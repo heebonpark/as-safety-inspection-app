@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AS 및 공사현장 안전점검 일일 보고</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --ink:#1b2a2e;
+    --ink-soft:#4d5d5f;
+    --paper:#eef1ef;
+    --surface:#ffffff;
+    --line:#c7d1cf;
+    --line-soft:#dfe6e4;
+    --brand:#0d4f5c;
+    --brand-deep:#0a3b45;
+    --amber:#d98c1f;
+    --red:#b0392b;
+    --green:#2f7d5f;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(15,30,32,.06), 0 8px 24px rgba(15,30,32,.07);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Noto Sans KR',sans-serif;
+    background:radial-gradient(1200px 600px at 100% -10%, rgba(13,79,92,.06), transparent 60%), var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;}
+  ::selection{background:rgba(13,79,92,.18);}
+
+  #app{min-height:100vh;display:flex;flex-direction:column;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 14px;padding:14px 22px;background:var(--brand-deep);color:#eef4f2;box-shadow:var(--shadow);}
+  .topbar .brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.2px;}
+  .topbar .brand .dot{width:10px;height:10px;border-radius:2px;background:var(--amber);flex:none;}
+  .topbar .brand .sub{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a9c2bd;font-weight:500;margin-left:6px;}
+  .topbar .who{display:flex;align-items:center;gap:12px;font-size:13px;color:#cfe3df;white-space:nowrap;}
+  .topbar button.link{background:transparent;border:1px solid rgba(255,255,255,.28);color:#eef4f2;padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:500;}
+  .topbar button.link:hover{background:rgba(255,255,255,.1);}
+
+  main{flex:1;display:flex;justify-content:center;padding:26px 16px 60px;}
+  .shell{width:100%;max-width:1040px;}
+
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .login-card{width:100%;max-width:460px;background:var(--surface);border-radius:16px;box-shadow:var(--shadow);border:1px solid var(--line-soft);overflow:hidden;}
+  .login-head{background:linear-gradient(135deg,var(--brand-deep),var(--brand));color:#eef4f2;padding:28px 28px 22px;}
+  .login-head .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1.5px;color:#a9c2bd;text-transform:uppercase;}
+  .login-head h1{margin:6px 0 4px;font-size:21px;font-weight:900;line-height:1.35;}
+  .login-head p{margin:0;font-size:12.5px;color:#bcd6d1;}
+  .tabs{display:flex;border-bottom:1px solid var(--line-soft);}
+  .tab{flex:1;text-align:center;padding:13px 8px;font-size:13.5px;font-weight:700;color:var(--ink-soft);background:#f6f8f7;border:none;border-bottom:3px solid transparent;}
+  .tab.active{color:var(--brand-deep);background:var(--surface);border-bottom-color:var(--amber);}
+  .login-body{padding:24px 26px 28px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
+  .field select, .field input[type=text], .field input[type=password], .field input[type=date]{
+    width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;color:var(--ink);background:#fff;
+  }
+  .field select:focus,.field input:focus,.field textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(13,79,92,.12);}
+  .btn-primary{width:100%;padding:12px;border:none;border-radius:9px;background:var(--brand-deep);color:#fff;font-weight:700;font-size:14.5px;margin-top:6px;transition:background .15s;}
+  .btn-primary:hover{background:var(--brand);}
+  .btn-primary:disabled{background:#aab6b4;cursor:not-allowed;}
+  .hint{font-size:12px;color:var(--ink-soft);margin-top:10px;line-height:1.6;}
+  .err{color:var(--red);font-size:12.5px;font-weight:600;margin-top:8px;}
+
+  .btn{padding:9px 16px;border-radius:8px;border:1.5px solid var(--line);background:#fff;color:var(--ink);font-size:13px;font-weight:700;}
+  .btn:hover{border-color:var(--brand);color:var(--brand-deep);}
+  .btn.solid{background:var(--brand-deep);border-color:var(--brand-deep);color:#fff;}
+  .btn.solid:hover{background:var(--brand);}
+  .btn.danger{color:var(--red);border-color:#e6c3bd;}
+  .btn.danger:hover{background:#fdf1ef;border-color:var(--red);}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--ink-soft);}
+
+  .formtabs{display:flex;gap:6px;margin-bottom:14px;}
+  .ftab{padding:9px 16px;border-radius:8px 8px 0 0;border:1.5px solid var(--line-soft);border-bottom:none;background:#e7edec;color:var(--ink-soft);font-size:13px;font-weight:700;}
+  .ftab.active{background:var(--surface);color:var(--brand-deep);border-color:var(--line-soft);box-shadow:0 -2px 0 var(--amber) inset;}
+
+  table.grid th.req::after{content:" *";color:var(--red);font-weight:900;}
+
+  .actionbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+  .actionbar .title{font-size:15px;font-weight:900;color:var(--brand-deep);}
+  .actionbar .title .mono{font-size:11.5px;color:var(--ink-soft);font-weight:500;display:block;margin-top:2px;}
+  .actionbar .btns{display:flex;gap:8px;flex-wrap:wrap;}
+
+  .sheet{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);border:1px solid var(--line-soft);padding:26px 30px 30px;}
+  .sheet h2.formtitle{text-align:center;font-size:19px;font-weight:900;letter-spacing:.5px;color:var(--brand-deep);margin:2px 0 4px;}
+  .sheet .formtitle-sub{text-align:center;font-size:11px;color:var(--ink-soft);margin-bottom:16px;font-family:'IBM Plex Mono',monospace;}
+
+  table.grid{width:100%;border-collapse:collapse;margin-bottom:14px;table-layout:fixed;}
+  table.grid th, table.grid td{border:1px solid var(--line);padding:7px 9px;font-size:12.5px;vertical-align:middle;overflow:hidden;}
+  table.grid th{background:#f3f6f5;color:var(--brand-deep);font-weight:700;text-align:left;white-space:nowrap;}
+  table.grid td input[type=text], table.grid td input[type=date]{width:100%;border:none;background:transparent;font-size:13px;padding:3px 2px;color:var(--ink);}
+  table.grid td input:focus{outline:none;background:#f6faf9;border-radius:4px;}
+
+  .section-label{font-size:12.5px;font-weight:900;color:#fff;background:var(--brand-deep);padding:6px 10px;border-radius:6px 6px 0 0;display:inline-block;margin-bottom:0;}
+
+  table.check{width:100%;border-collapse:collapse;margin-bottom:14px;table-layout:fixed;}
+  table.check th{background:var(--brand-deep);color:#fff;font-size:11.5px;font-weight:700;padding:7px 8px;text-align:center;}
+  table.check td{border:1px solid var(--line);padding:7px 8px;font-size:12.3px;vertical-align:middle;}
+  table.check td.gu{width:64px;text-align:center;font-weight:900;color:var(--brand-deep);background:#f3f6f5;}
+  table.check td.item{line-height:1.5;}
+  table.check td.item .note{display:block;font-size:11px;color:var(--red);margin-top:2px;}
+  table.check td.result{width:150px;}
+  table.check td.action{width:170px;}
+  .result-opts{display:flex;gap:8px;justify-content:center;flex-wrap:nowrap;}
+  .result-opt{display:flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:var(--ink-soft);white-space:nowrap;}
+  .result-opt input{accent-color:var(--brand-deep);width:14px;height:14px;}
+  .result-opt.good{color:var(--green);}
+  .result-opt.bad{color:var(--red);}
+  table.check td.action input{width:100%;border:none;background:transparent;font-size:12px;border-bottom:1px dashed var(--line);padding:2px 0;}
+  table.check td.action input:focus{outline:none;border-bottom-color:var(--brand);}
+
+  .photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:0 6px 6px 6px;overflow:hidden;margin-bottom:14px;}
+  @media (max-width:640px){ .photo-grid{grid-template-columns:1fr;} }
+  .photo-cell{background:#fff;padding:10px;display:flex;flex-direction:column;gap:8px;}
+  .photo-cell .plabel{font-size:12px;font-weight:700;color:var(--brand-deep);text-align:center;}
+  .photo-box{position:relative;width:100%;aspect-ratio:4/3;border:1.5px dashed var(--line);border-radius:8px;background:#fafcfb;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}
+  .photo-box img{width:100%;height:100%;object-fit:cover;}
+  .photo-box .ph{font-size:12px;color:var(--ink-soft);text-align:center;padding:0 10px;}
+  .photo-box input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+  .photo-clear{border:none;background:transparent;color:var(--red);font-size:11px;font-weight:700;text-decoration:underline;padding:0;align-self:center;}
+
+  .siggrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+  @media (max-width:640px){ .siggrid{grid-template-columns:1fr;} }
+  .sigbox{border:1px solid var(--line);border-radius:8px;padding:10px 12px;}
+  .sigbox label.mini{display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
+  .sigpad{border:1px dashed var(--line);border-radius:4px;background:#fdfefe;width:100%;height:56px;display:block;}
+  canvas.sigpad{touch-action:none;}
+  .sig-clear{border:none;background:transparent;color:var(--ink-soft);font-size:10px;text-decoration:underline;padding:0;margin-top:4px;}
+
+  textarea.wide{width:100%;min-height:44px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12.8px;resize:vertical;}
+  textarea.wide:focus{outline:none;border-color:var(--brand);}
+
+  .meta-footer{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;}
+
+  .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+  .stat{flex:1;min-width:140px;background:var(--surface);border:1px solid var(--line-soft);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);}
+  .stat .n{font-size:24px;font-weight:900;color:var(--brand-deep);font-family:'IBM Plex Mono',monospace;}
+  .stat .l{font-size:11.5px;color:var(--ink-soft);font-weight:700;margin-top:2px;}
+  .panel{background:var(--surface);border:1px solid var(--line-soft);border-radius:12px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:18px;}
+  .panel h3{margin:0 0 12px;font-size:14px;font-weight:900;color:var(--brand-deep);display:flex;align-items:center;gap:8px;}
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+  .filters input,.filters select{padding:8px 10px;border:1.5px solid var(--line);border-radius:7px;font-size:12.8px;}
+  .filters input[type=text]{flex:1;min-width:160px;}
+  table.list{width:100%;border-collapse:collapse;}
+  table.list th{text-align:left;font-size:11.5px;color:var(--ink-soft);font-weight:700;padding:8px;border-bottom:2px solid var(--line);text-transform:uppercase;letter-spacing:.3px;}
+  table.list td{padding:9px 8px;font-size:13px;border-bottom:1px solid var(--line-soft);}
+  table.list tr:hover td{background:#f6faf9;}
+  table.list .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.8px;font-weight:700;}
+  .badge.ok{background:#e4f3ec;color:var(--green);}
+  .badge.bad{background:#fbe9e6;color:var(--red);}
+  .rowbtns{display:flex;gap:6px;}
+  .rowbtns button{padding:5px 10px;font-size:11.5px;}
+  .empty{text-align:center;padding:40px 10px;color:var(--ink-soft);font-size:13px;}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--brand-deep);color:#fff;padding:11px 20px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:var(--shadow);z-index:100;opacity:0;transition:opacity .25s, transform .25s;pointer-events:none;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+
+  footer.appfoot{text-align:center;padding:16px;font-size:11px;color:var(--ink-soft);}
+
+  #print-all-root{display:none;}
+  #print-all-root .print-page{page-break-after:always;margin-bottom:24px;}
+  #print-all-root .print-page:last-child{page-break-after:auto;}
+
+  @media print{
+    body{background:#fff;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+    .no-print{display:none !important;}
+    main{padding:0;display:block;}
+    .shell{max-width:none;}
+    .sheet{box-shadow:none;border:none;border-radius:0;padding:0;}
+    .sig-clear,.photo-clear{display:none !important;}
+    input::placeholder, textarea::placeholder{color:transparent !important;}
+    input[type=text], textarea{border:none !important;background:transparent !important;overflow:visible !important;}
+    table.check td.action input{border-bottom:1px dashed #999 !important;}
+    table.grid td select{appearance:none;-webkit-appearance:none;-moz-appearance:none;border:none !important;background:transparent !important;padding:1px 2px !important;color:#1b2a2e !important;opacity:1 !important;-webkit-text-fill-color:#1b2a2e !important;}
+    .formtitle-sub{display:none !important;}
+    table{page-break-inside:auto;}
+    tr, td, th, .section-label, .photo-cell{page-break-inside:avoid;}
+    table.grid th, table.grid td, table.check th, table.check td, .sigbox, textarea.wide{border:1px solid #333 !important;}
+    .sigbox{border-radius:0 !important;}
+    .photo-box{border:1px solid #333 !important;}
+    .photo-box input[type=file]{display:none !important;}
+  }
+
+  @media (max-width:720px){
+    table.check td.action, table.check th:nth-child(4){display:none;}
+    table.grid colgroup{display:none;}
+    table.grid, table.grid tr, table.grid th, table.grid td{display:block;width:100% !important;}
+    table.grid{table-layout:auto;}
+    table.grid tr{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;overflow:hidden;}
+    table.grid th{border:none;background:#f3f6f5;padding:7px 10px 2px;font-size:11px;white-space:normal;overflow:visible;margin-top:6px;}
+    table.grid th:first-child{margin-top:0;}
+    table.grid td{border:none;padding:2px 10px 9px;overflow:visible;}
+    table.grid td input, table.grid td select{width:100%;}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// 작업 전 TBM 및 위험성평가표 앱과 같은 Firebase 프로젝트를 그대로 재사용한다(관리자가
+// 이미 검증해서 쓰고 있는 백엔드라 새로 만들 필요가 없다). 컬렉션 이름만 as_data로
+// 따로 둬서 TBM 쪽 데이터(tbm_data)와 절대 섞이지 않게 한다.
+const firebaseConfig = {
+  apiKey: "AIzaSyDxvT2do2sueEQ6XeBHxLc2O0136S5oQPk",
+  authDomain: "tbm-risk-app.firebaseapp.com",
+  projectId: "tbm-risk-app",
+  storageBucket: "tbm-risk-app.firebasestorage.app",
+  messagingSenderId: "14610240093",
+  appId: "1:14610240093:web:75de26c48b56b72fab73b4"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const COLLECTION = "as_data";
+
+/* ============================================================
+   AS 및 공사현장 안전점검 일일 보고 — 단일 파일 배포용 웹앱
+   (작업 전 TBM 및 위험성평가표 앱과 동일한 패턴/디자인을 따른다)
+   ============================================================ */
+
+const BRANCHES = ["중앙","강북","서대문","고양","의정부","남양주","강릉","원주"];
+const ADMIN_PASSWORD = "0303";
+const DEFAULT_HQ = "강북강원본부";
+
+// 종이 양식(체크리스트)의 표준 점검항목. 현장마다 해당 안 되는 항목은 결과를
+// 비워두면 되고(예: 사다리 작업이 없으면 2~4번은 비움), 현장사진도 그 항목만
+// 자동으로 빈 칸으로 표시된다 — AS 방문/공사현장 어느 쪽이든 같은 화면 하나로 쓴다.
+const CHECK_ITEMS = [
+  { k:"helmet", label:"안전모 착용", note:"※상시 적용(협력사는 상시 착용)", photo:"안전모 착용" },
+  { k:"outrigger", label:"사다리 아웃트리거(①1포인트 이상 필수 사용 ②4개 설치 여부), 사다리 미끄럼방지(논슬립패드/지주끝 고무) 상태", note:"", photo:"사다리 상태(논슬립패드·아웃트리거 부착)" },
+  { k:"hook", label:"A형 사다리 안전고리 정상 여부 확인", note:"※협력사 제외", photo:"사다리 상태(안전고리)" },
+  { k:"rule", label:"사다리 안전수칙 준수(발판위치 85cm 이하)", note:"3단 확장 후: 최상부발판·하단 디딤대 작업 금지 / 85cm 초과: 협력사 이관", photo:"사다리 작업 중인 사진(지면부터 전신 촬영)" },
+];
+const PHOTO_CAPTION = "※필수사항 : 영상통화자 얼굴나오게 촬영";
+
+/* ---------------- storage helpers ---------------- */
+async function sGet(key){
+  try{ const s = await getDoc(doc(db, COLLECTION, key)); return s.exists() ? s.data().value : null; }
+  catch(e){ return null; }
+}
+async function sSet(key, value){
+  try{ await setDoc(doc(db, COLLECTION, key), { value }); return true; }
+  catch(e){ console.error("storage set failed", e); return null; }
+}
+async function sListValues(prefix){
+  try{
+    const values = [];
+    const qs = await getDocs(collection(db, COLLECTION));
+    qs.forEach(d=>{ if(d.id.startsWith(prefix)) values.push(d.data().value); });
+    return values;
+  }catch(e){ return []; }
+}
+async function sDelete(key){
+  try{ await deleteDoc(doc(db, COLLECTION, key)); return true; }
+  catch(e){ return null; }
+}
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function esc(s){ return (s||"").replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// 사진은 Firestore 문서 1개(1MB 제한) 안에 텍스트와 함께 저장하므로, 올리자마자
+// 캔버스로 축소·재압축해서 용량을 크게 줄인다(별도 파일 저장소를 새로 구축할
+// 필요 없이 지금 있는 Firestore 하나로 충분하게).
+function compressImageFile(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(url);
+      const maxDim = 720;
+      let {width, height} = img;
+      if(width > height && width > maxDim){ height = Math.round(height*maxDim/width); width = maxDim; }
+      else if(height > maxDim){ width = Math.round(width*maxDim/height); height = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      let quality = 0.62;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while(dataUrl.length > 260000 && quality > 0.25){
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+      resolve(dataUrl);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('이미지를 읽을 수 없습니다.')); };
+    img.src = url;
+  });
+}
+
+/* ---------------- app state ---------------- */
+const state = {
+  view: "login",           // login | form | admin
+  role: null,              // inspector | admin
+  inspector: null,         // {branch, name}
+  editingRecordId: null,
+  currentForm: null,
+  records: [],
+  adminFilter: { q:"", branch:"", from:"", to:"" },
+};
+
+function blankForm(prefill){
+  return {
+    id: uid(),
+    createdAt: new Date().toISOString(),
+    updatedAt: null,
+    hq: DEFAULT_HQ,
+    branch: (prefill && prefill.branch) || "",
+    inspectDate: todayStr(),
+    inspectOrg: (prefill && prefill.branch) || "",
+    inspectorName: (prefill && prefill.name) || "",
+    inspectorSig: "",
+    contractNo: "",
+    companyName: "",
+    siteAddress: "",
+    teamName: "",
+    workerName: "",
+    checklist: CHECK_ITEMS.map(x=>({k:x.k, result:"", note:"", photo:""})),
+    remarks: "",
+  };
+}
+
+/* ---------------- boot ---------------- */
+async function loadRecords(){
+  const items = await sListValues("record:");
+  state.records = items.filter(Boolean).map(v=>JSON.parse(v)).sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
+}
+
+function render(){
+  const app = document.getElementById('app');
+  if(state.view === "login"){ app.innerHTML = loginHTML(); bindLogin(); return; }
+  app.innerHTML = shellHTML();
+  bindShell();
+  if(state.view === "form") renderFormInto(document.getElementById('viewport'));
+  if(state.view === "admin") renderAdminInto(document.getElementById('viewport'));
+}
+
+/* ============================================================
+   LOGIN
+   ============================================================ */
+function loginHTML(){
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-head">
+        <div class="eyebrow">KT Security &middot; 강북/강원사업지원팀</div>
+        <h1>AS 및 공사현장<br>안전점검 일일 보고</h1>
+        <p>영상통화 또는 방문으로 확인한 현장 점검 결과를 바로 등록합니다.</p>
+      </div>
+      <div class="tabs">
+        <button class="tab active" id="tab-reg" type="button">점검자 로그인</button>
+        <button class="tab" id="tab-admin" type="button">관리자 로그인</button>
+      </div>
+      <div class="login-body">
+        <div id="pane-reg">
+          <div class="field">
+            <label>관리지사</label>
+            <select id="in-branch">
+              <option value="">선택하세요</option>
+              ${BRANCHES.map(b=>`<option value="${b}">${b}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label>점검자 이름</label>
+            <input type="text" id="in-name" placeholder="예) 박대헌">
+          </div>
+          <button class="btn-primary" id="btn-reg-start">점검 보고서 작성 시작</button>
+          <div class="hint">지사/이름은 이 화면에서만 확인용으로 쓰이며, 실제 보고서에는 입력하는 정보가 그대로 저장됩니다.</div>
+        </div>
+        <div id="pane-admin" style="display:none;">
+          <div class="field">
+            <label>관리자 비밀번호</label>
+            <input type="password" id="in-admin-pw" placeholder="••••">
+          </div>
+          <button class="btn-primary" id="btn-admin-login">관리자 로그인</button>
+          <div id="admin-err" class="err" style="display:none;">비밀번호가 올바르지 않습니다.</div>
+          <div class="hint">관리자는 전체 제출 내역 조회, 검색, 인쇄, 삭제를 할 수 있습니다.</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function bindLogin(){
+  const tabReg = document.getElementById('tab-reg');
+  const tabAdmin = document.getElementById('tab-admin');
+  const paneReg = document.getElementById('pane-reg');
+  const paneAdmin = document.getElementById('pane-admin');
+  tabReg.onclick = ()=>{ tabReg.classList.add('active'); tabAdmin.classList.remove('active'); paneReg.style.display='block'; paneAdmin.style.display='none'; };
+  tabAdmin.onclick = ()=>{ tabAdmin.classList.add('active'); tabReg.classList.remove('active'); paneAdmin.style.display='block'; paneReg.style.display='none'; };
+
+  document.getElementById('btn-reg-start').onclick = ()=>{
+    const branch = document.getElementById('in-branch').value;
+    const name = document.getElementById('in-name').value.trim();
+    if(!branch){ toast("관리지사를 선택해 주세요."); return; }
+    if(!name){ toast("점검자 이름을 입력해 주세요."); return; }
+    state.role = "inspector";
+    state.inspector = {branch, name};
+    state.editingRecordId = null;
+    state.currentForm = blankForm({branch, name});
+    state.view = "form";
+    render();
+  };
+
+  document.getElementById('btn-admin-login').onclick = async ()=>{
+    const pw = document.getElementById('in-admin-pw').value;
+    if(pw === ADMIN_PASSWORD){
+      state.role = "admin";
+      await loadRecords();
+      state.view = "admin";
+      render();
+    }else{
+      document.getElementById('admin-err').style.display = 'block';
+    }
+  };
+  document.getElementById('in-admin-pw').addEventListener('keydown', e=>{
+    if(e.key === 'Enter') document.getElementById('btn-admin-login').click();
+  });
+}
+
+/* ============================================================
+   SHELL
+   ============================================================ */
+function shellHTML(){
+  const who = state.role === 'admin' ? `관리자 모드` : `${esc(state.inspector.branch)} / ${esc(state.inspector.name)}`;
+  return `
+  <div class="topbar no-print">
+    <div class="brand"><span class="dot"></span>AS·공사현장 안전점검 시스템<span class="sub">KT-TELECOP / 강북·강원</span></div>
+    <div class="who"><span>${who}</span><button class="link" id="btn-logout">로그아웃</button></div>
+  </div>
+  <main><div class="shell" id="viewport"></div></main>
+  <footer class="appfoot no-print">AS 및 공사현장 안전점검 일일 보고 &middot; 내부 안전관리용 &middot; 데이터는 팀 공용 저장소에 안전하게 보관됩니다.</footer>`;
+}
+
+function bindShell(){
+  document.getElementById('btn-logout').onclick = ()=>{
+    state.role = null; state.inspector = null; state.currentForm = null; state.view = "login";
+    render();
+  };
+}
+
+/* ============================================================
+   FORM
+   ============================================================ */
+function renderFormInto(root, opts){
+  opts = opts || {};
+  const readOnly = !!opts.readOnly;
+  const fromAdmin = !!opts.fromAdmin;
+  const f = state.currentForm;
+  root.innerHTML = `
+    <div class="actionbar no-print">
+      <div class="title">${readOnly ? '점검 보고서 보기' : (state.editingRecordId ? '점검 보고서 수정' : '새 점검 보고서 작성')}
+        <span class="mono">${esc(f.siteAddress || '')}</span>
+      </div>
+      <div class="btns">
+        ${fromAdmin ? `<button class="btn" id="btn-back-admin">← 목록으로</button>` : (state.role==='inspector' ? `<button class="btn" id="btn-my-list">📋 내가 등록한 보고서</button>` : '')}
+        <button class="btn" id="btn-print">🖨 인쇄/PDF</button>
+        ${!readOnly ? `<button class="btn solid" id="btn-submit">${state.editingRecordId ? '수정 저장' : '제출'}</button>` : ''}
+      </div>
+    </div>
+    <div class="sheet" id="sheet"></div>
+    ${!fromAdmin && state.role==='inspector' ? `<div class="panel" id="mine-panel" style="display:none;"></div>` : ''}
+  `;
+  renderSheet(document.getElementById('sheet'), f, readOnly);
+  document.getElementById('btn-print').onclick = ()=>window.print();
+  if(!readOnly){
+    document.getElementById('btn-submit').onclick = submitForm;
+  }
+  if(fromAdmin){
+    document.getElementById('btn-back-admin').onclick = ()=>{ state.view='admin'; render(); };
+  }else if(state.role==='inspector'){
+    document.getElementById('btn-my-list').onclick = async ()=>{
+      const panel = document.getElementById('mine-panel');
+      const showing = panel.style.display !== 'none';
+      if(showing){ panel.style.display='none'; return; }
+      await loadRecords();
+      renderMineListInto(panel);
+      panel.style.display='block';
+    };
+  }
+}
+
+function renderMineListInto(root){
+  const mine = state.records.filter(r=>r.branch===state.inspector.branch && r.inspectorName===state.inspector.name);
+  root.innerHTML = `<h3>내가 등록한 보고서 (${mine.length}건)</h3>` +
+    (mine.length===0 ? `<div class="empty">등록한 보고서가 없습니다.</div>` :
+    `<table class="list"><tr><th>점검일자</th><th>상호</th><th>현장주소</th><th>상태</th><th></th></tr>${mine.map(r=>{
+      const hasBad = (r.checklist||[]).some(x=>x.result==='bad');
+      return `<tr>
+        <td class="mono">${esc(r.inspectDate)}</td>
+        <td>${esc(r.companyName||'-')}</td>
+        <td>${esc(r.siteAddress||'-')}</td>
+        <td><span class="badge ${hasBad?'bad':'ok'}">${hasBad?'미흡 확인 필요':'양호'}</span></td>
+        <td><div class="rowbtns"><button class="btn ghost" data-mine-edit="${r.id}">수정</button></div></td>
+      </tr>`;
+    }).join('')}</table>`);
+  root.querySelectorAll('[data-mine-edit]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rec = state.records.find(r=>r.id===btn.getAttribute('data-mine-edit'));
+      state.currentForm = JSON.parse(JSON.stringify(rec));
+      state.editingRecordId = rec.id;
+      renderFormInto(document.getElementById('viewport'));
+    });
+  });
+}
+
+function sheetOuterHTML(f, dis, sigImgHTML){
+  return `
+    <h2 class="formtitle">AS 및 공사현장 안전점검 일일 보고</h2>
+    <div class="formtitle-sub">※ 점검결과 항목에 체크, 미흡 시 보완사항 기재</div>
+
+    <table class="grid">
+      <colgroup><col style="width:14%"><col style="width:19%"><col style="width:14%"><col style="width:19%"><col style="width:14%"><col style="width:20%"></colgroup>
+      <tr>
+        <th>관리본부</th><td><input type="text" data-field="hq" value="${esc(f.hq)}" ${dis}></td>
+        <th class="req">관리지사</th><td>${selectHTML('branch', BRANCHES, f.branch, dis)}</td>
+        <th>점검일자</th><td><input type="date" data-field="inspectDate" value="${esc(f.inspectDate)}" ${dis}></td>
+      </tr>
+      <tr>
+        <th>점검기관(부서)</th><td><input type="text" data-field="inspectOrg" value="${esc(f.inspectOrg)}" ${dis}></td>
+        <th class="req">점검자</th><td><input type="text" data-field="inspectorName" value="${esc(f.inspectorName)}" ${dis}></td>
+        <th>계약번호</th><td><input type="text" data-field="contractNo" value="${esc(f.contractNo)}" ${dis}></td>
+      </tr>
+      <tr>
+        <th class="req">상호(협력사)</th><td colspan="2"><input type="text" data-field="companyName" value="${esc(f.companyName)}" placeholder="예) ㈜파컬렉티브" ${dis}></td>
+        <th>협력사 팀명</th><td colspan="2"><input type="text" data-field="teamName" value="${esc(f.teamName)}" placeholder="예) 주식회사비즈메이드(강북)_3팀" ${dis}></td>
+      </tr>
+      <tr>
+        <th class="req">현장주소</th><td colspan="3"><input type="text" data-field="siteAddress" value="${esc(f.siteAddress)}" placeholder="예) 서울 마포구 중동 362, 2층" ${dis}></td>
+        <th>작업자명</th><td><input type="text" data-field="workerName" value="${esc(f.workerName)}" ${dis}></td>
+      </tr>
+    </table>
+
+    <span class="section-label">Check List (안전점검)</span>
+    <table class="check">
+      <tr><th style="width:64px;">구분</th><th>점검항목</th><th style="width:150px;">점검결과</th><th style="width:170px;">보완사항</th></tr>
+      ${CHECK_ITEMS.map((it,i)=>`
+        <tr>
+          ${i===0?`<td class="gu" rowspan="${CHECK_ITEMS.length}">안전<br>점검</td>`:''}
+          <td class="item">${i+1}. ${esc(it.label)}${it.note?`<span class="note">${esc(it.note)}</span>`:''}</td>
+          <td class="result">
+            <div class="result-opts">
+              <label class="result-opt good"><input type="radio" name="ck-${i}" value="good" data-ck-result="${i}" ${f.checklist[i].result==='good'?'checked':''} ${dis}> 양호</label>
+              <label class="result-opt bad"><input type="radio" name="ck-${i}" value="bad" data-ck-result="${i}" ${f.checklist[i].result==='bad'?'checked':''} ${dis}> 미흡</label>
+            </div>
+          </td>
+          <td class="action"><input type="text" data-ck-note="${i}" value="${esc(f.checklist[i].note)}" placeholder="미흡 시 보완사항" ${dis}></td>
+        </tr>
+      `).join("")}
+    </table>
+
+    <span class="section-label">현장 사진</span>
+    <div class="photo-caption" style="text-align:center;font-size:10.5px;color:var(--red);font-weight:700;background:#fdf1ef;border:1px solid var(--line);border-top:none;padding:4px;">${PHOTO_CAPTION}</div>
+    <div class="photo-grid">
+      ${CHECK_ITEMS.map((it,i)=>photoCellHTML(it, i, f.checklist[i].photo, dis)).join("")}
+    </div>
+
+    <span class="section-label">비고 / 점검자 서명</span>
+    <div class="siggrid" style="margin-top:0;border:1px solid var(--line);border-top:none;border-radius:0 0 6px 6px;padding:10px 12px;">
+      <div>
+        <label class="mini" style="display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;">비고</label>
+        <textarea class="wide" data-field="remarks" style="min-height:56px;" ${dis}>${esc(f.remarks)}</textarea>
+      </div>
+      <div class="sigbox" style="border:none;padding:0;">
+        <label class="mini">점검자 서명</label>
+        <div class="sigcell" id="sig-cell">${sigImgHTML || ''}</div>
+      </div>
+    </div>
+
+    <div class="meta-footer">
+      <span>${esc(f.inspectorName||'-')} / ${esc(f.branch||'-')}</span>
+      <span>${f.updatedAt ? '수정' : '작성'}일시 ${new Date(f.updatedAt||f.createdAt).toLocaleString('ko-KR')}</span>
+    </div>
+  `;
+}
+
+function photoCellHTML(item, idx, dataUrl, dis){
+  const disabled = dis ? true : false;
+  return `
+    <div class="photo-cell">
+      <div class="plabel">${idx+1}. ${esc(item.photo)}</div>
+      <div class="photo-box" data-photo-box="${idx}">
+        ${dataUrl ? `<img src="${dataUrl}" alt="">` : `<div class="ph">탭하여 사진 촬영/첨부</div>`}
+        ${!disabled ? `<input type="file" accept="image/*" capture="environment" data-photo-input="${idx}">` : ''}
+      </div>
+      ${dataUrl && !disabled ? `<button type="button" class="photo-clear" data-photo-clear="${idx}">사진 지우기</button>` : ''}
+    </div>
+  `;
+}
+
+function selectHTML(field, list, value, dis){
+  return `<select data-field="${field}" ${dis}>` + `<option value="">선택</option>` +
+    list.map(v=>`<option value="${esc(v)}" ${v===value?'selected':''}>${esc(v)}</option>`).join("") + `</select>`;
+}
+
+function renderSheet(el, f, readOnly){
+  const dis = readOnly ? 'disabled' : '';
+  el.innerHTML = sheetOuterHTML(f, dis, '');
+  bindFormInputs(el, f, readOnly);
+  setupSigPad(el.querySelector('#sig-cell'), f, readOnly);
+}
+
+function bindFormInputs(el, f, readOnly){
+  el.querySelectorAll('[data-field]').forEach(inp=>{
+    inp.addEventListener('input', ()=>{ f[inp.getAttribute('data-field')] = inp.value; });
+    inp.addEventListener('change', ()=>{ f[inp.getAttribute('data-field')] = inp.value; });
+  });
+  if(readOnly) return;
+  el.querySelectorAll('[data-ck-result]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{ f.checklist[Number(inp.getAttribute('data-ck-result'))].result = inp.value; });
+  });
+  el.querySelectorAll('[data-ck-note]').forEach(inp=>{
+    inp.addEventListener('input', ()=>{ f.checklist[Number(inp.getAttribute('data-ck-note'))].note = inp.value; });
+  });
+  el.querySelectorAll('[data-photo-input]').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const idx = Number(inp.getAttribute('data-photo-input'));
+      const file = inp.files && inp.files[0];
+      if(!file) return;
+      try{
+        const dataUrl = await compressImageFile(file);
+        f.checklist[idx].photo = dataUrl;
+        renderSheet(el, f, readOnly);
+      }catch(e){ toast("사진을 처리하지 못했습니다. 다시 시도해 주세요."); }
+    });
+  });
+  el.querySelectorAll('[data-photo-clear]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const idx = Number(btn.getAttribute('data-photo-clear'));
+      f.checklist[idx].photo = "";
+      renderSheet(el, f, readOnly);
+    });
+  });
+}
+
+function setupSigPad(cellEl, f, readOnly){
+  if(readOnly){
+    cellEl.innerHTML = f.inspectorSig ? `<img class="sigpad" src="${f.inspectorSig}" style="object-fit:contain;">` : `<div class="sigpad"></div>`;
+    return;
+  }
+  cellEl.innerHTML = `<canvas class="sigpad" width="300" height="112"></canvas><button type="button" class="sig-clear">지우고 다시 서명</button>`;
+  const canvas = cellEl.querySelector('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.strokeStyle = '#1b2a2e';
+  if(f.inspectorSig){
+    const img = new Image();
+    img.onload = ()=>ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    img.src = f.inspectorSig;
+  }
+  let drawing=false, last=null;
+  function pos(e){
+    const r = canvas.getBoundingClientRect();
+    const cx = (e.touches?e.touches[0].clientX:e.clientX) - r.left;
+    const cy = (e.touches?e.touches[0].clientY:e.clientY) - r.top;
+    return {x:cx*canvas.width/r.width, y:cy*canvas.height/r.height};
+  }
+  function start(e){ e.preventDefault(); drawing=true; last=pos(e); }
+  function move(e){ if(!drawing) return; e.preventDefault(); const p=pos(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; }
+  function end(){ if(!drawing) return; drawing=false; f.inspectorSig = canvas.toDataURL('image/png'); }
+  canvas.addEventListener('mousedown', start);
+  canvas.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+  canvas.addEventListener('touchstart', start, {passive:false});
+  canvas.addEventListener('touchmove', move, {passive:false});
+  canvas.addEventListener('touchend', end);
+  cellEl.querySelector('.sig-clear').onclick = ()=>{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    f.inspectorSig = "";
+  };
+}
+
+async function submitForm(){
+  const f = state.currentForm;
+  if(!f.branch){ toast("관리지사를 선택해 주세요."); return; }
+  if(!f.companyName){ toast("상호(협력사)를 입력해 주세요."); return; }
+  if(!f.siteAddress){ toast("현장주소를 입력해 주세요."); return; }
+  const isEdit = !!state.editingRecordId;
+  if(isEdit) f.updatedAt = new Date().toISOString();
+  const key = "record:" + f.id;
+  const ok = await sSet(key, JSON.stringify(f));
+  if(ok){
+    toast(isEdit ? "수정 내용이 저장되었습니다." : "점검 보고서가 저장되었습니다.");
+    state.editingRecordId = null;
+    await loadRecords();
+    if(state.role === 'admin'){ state.view='admin'; render(); }
+    else{ state.currentForm = blankForm(state.inspector); render(); }
+  }else{
+    toast("저장에 실패했습니다. 인터넷 연결을 확인해 주세요.");
+  }
+}
+
+/* ============================================================
+   ADMIN DASHBOARD
+   ============================================================ */
+async function renderAdminInto(root){
+  root.innerHTML = `
+    <div class="actionbar no-print">
+      <div class="title">관리자 대시보드 <span class="mono">등록된 점검 보고서 전체 관리</span></div>
+      <div class="btns">
+        <button class="btn" id="btn-print-all">🖨 전체 인쇄/PDF</button>
+        <button class="btn" id="btn-zip">🗜 ZIP 압축 다운로드</button>
+        <button class="btn" id="btn-export">⬇ CSV 내보내기</button>
+        <button class="btn" id="btn-refresh">↻ 새로고침</button>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="panel">
+      <h3>제출 내역</h3>
+      <div class="filters">
+        <input type="text" id="f-q" placeholder="상호·현장주소·작업자 검색">
+        <select id="f-branch"><option value="">전체 지사</option>${BRANCHES.map(b=>`<option value="${b}">${b}</option>`).join("")}</select>
+        <input type="date" id="f-from">
+        <input type="date" id="f-to">
+      </div>
+      <div class="hint" style="margin:-2px 0 10px;">전체 인쇄·ZIP·CSV는 위 검색/필터 조건이 적용된 건에만 적용됩니다.</div>
+      <div id="list-wrap"></div>
+    </div>
+  `;
+  document.getElementById('btn-refresh').onclick = async ()=>{ await loadRecords(); renderAdminList(); renderStats(); };
+  document.getElementById('btn-export').onclick = exportCSV;
+  document.getElementById('btn-print-all').onclick = printAllRecords;
+  document.getElementById('btn-zip').onclick = exportZip;
+  ['f-q','f-branch','f-from','f-to'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', ()=>{
+      state.adminFilter = {
+        q: document.getElementById('f-q').value.trim().toLowerCase(),
+        branch: document.getElementById('f-branch').value,
+        from: document.getElementById('f-from').value,
+        to: document.getElementById('f-to').value,
+      };
+      renderAdminList();
+    });
+  });
+  renderStats();
+  renderAdminList();
+}
+
+function getFilteredRecords(){
+  const {q, branch, from, to} = state.adminFilter;
+  return state.records.filter(r=>{
+    if(branch && r.branch !== branch) return false;
+    if(from && r.inspectDate < from) return false;
+    if(to && r.inspectDate > to) return false;
+    if(q){
+      const hay = `${r.companyName} ${r.siteAddress} ${r.workerName} ${r.teamName}`.toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function csvContentFor(rows){
+  const header = ["점검일자","관리지사","점검자","상호","협력사팀명","현장주소","작업자명","계약번호","미흡항목수","제출시각"];
+  const lines = [header.join(",")];
+  rows.forEach(r=>{
+    const badCount = (r.checklist||[]).filter(x=>x.result==='bad').length;
+    const cells = [r.inspectDate, r.branch, r.inspectorName||"", r.companyName, r.teamName||"", r.siteAddress, r.workerName||"", r.contractNo||"", badCount, new Date(r.createdAt).toLocaleString('ko-KR')];
+    lines.push(cells.map(c => `"${String(c==null?"":c).replace(/"/g,'""')}"`).join(","));
+  });
+  return "﻿" + lines.join("\r\n");
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function safeFileName(s){ return String(s||'').replace(/[\\/:*?"<>|]/g,'_').replace(/\s+/g,'_').slice(0,80); }
+
+function exportCSV(){
+  const rows = getFilteredRecords();
+  if(rows.length===0){ toast("내보낼 내역이 없습니다."); return; }
+  downloadBlob(new Blob([csvContentFor(rows)], {type:'text/csv;charset=utf-8;'}), `AS_안전점검_${todayStr()}.csv`);
+}
+
+// 서명 이미지를 읽기전용 HTML로 바로 문자열 조립할 때 쓰는 조각 — 전체 인쇄와 ZIP
+// 내보내기 둘 다, 나중에 스크립트로 채워 넣지 않고 sheetOuterHTML의 세 번째 인자로
+// 바로 완성된 마크업을 넘긴다(ZIP으로 저장된 개별 HTML 파일은 스크립트 없이 열어도
+// 서명이 바로 보여야 하므로 더 안전하다).
+function sigStaticHTML(f){
+  return f.inspectorSig ? `<img class="sigpad" src="${f.inspectorSig}" style="object-fit:contain;">` : `<div class="sigpad"></div>`;
+}
+
+function printAllRecords(){
+  const rows = getFilteredRecords();
+  if(rows.length===0){ toast("인쇄할 내역이 없습니다."); return; }
+  document.querySelectorAll('#print-all-root').forEach(n=>n.remove());
+  const container = document.createElement('div');
+  container.id = 'print-all-root';
+  rows.forEach(r=>{
+    const div = document.createElement('div');
+    div.className = 'sheet print-page';
+    div.innerHTML = sheetOuterHTML(r, 'disabled', sigStaticHTML(r));
+    container.appendChild(div);
+  });
+  document.body.appendChild(container);
+  document.body.classList.add('printing-all');
+  toast(`${rows.length}건을 인쇄 준비했습니다.`);
+  setTimeout(()=>{
+    window.print();
+    const cleanup = ()=>{ container.remove(); document.body.classList.remove('printing-all'); window.removeEventListener('afterprint', cleanup); };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(cleanup, 60000);
+  }, 150);
+}
+
+function buildStaticDocument(f){
+  const styleTag = document.querySelector('style');
+  const styleText = styleTag ? styleTag.textContent : '';
+  const body = sheetOuterHTML(f, 'disabled', sigStaticHTML(f));
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+<title>${esc(f.companyName||'AS 안전점검')} ${esc(f.inspectDate||'')}</title>
+<style>${styleText}
+body{background:#fff;padding:16px;}
+.sheet{box-shadow:none;border:1px solid #c7d1cf;max-width:900px;margin:0 auto;}
+</style></head><body>
+<div class="sheet">${body}</div>
+</body></html>`;
+}
+
+async function exportZip(){
+  if(typeof JSZip === 'undefined'){ toast("압축 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."); return; }
+  const rows = getFilteredRecords();
+  if(rows.length===0){ toast("압축할 내역이 없습니다."); return; }
+  toast(`${rows.length}건을 압축하는 중입니다...`);
+  const zip = new JSZip();
+  const used = {};
+  rows.forEach(r=>{
+    let base = safeFileName(`${r.inspectDate}_${r.branch||''}_${r.companyName||'점검'}`);
+    if(used[base]!=null){ used[base]++; base += '_'+used[base]; } else used[base]=0;
+    zip.file(`${base}.html`, buildStaticDocument(r));
+  });
+  zip.file(`전체_제출내역_${todayStr()}.csv`, csvContentFor(rows));
+  const blob = await zip.generateAsync({type:"blob"});
+  downloadBlob(blob, `AS_안전점검_모음_${todayStr()}.zip`);
+  toast("압축파일 다운로드가 시작되었습니다.");
+}
+
+function renderStats(){
+  const el = document.getElementById('stats');
+  const total = state.records.length;
+  const today = todayStr();
+  const todayCount = state.records.filter(r=>r.inspectDate===today).length;
+  const badCount = state.records.filter(r=>(r.checklist||[]).some(x=>x.result==='bad')).length;
+  const branchCount = new Set(state.records.map(r=>r.branch).filter(Boolean)).size;
+  el.innerHTML = `
+    <div class="stat"><div class="n">${total}</div><div class="l">전체 제출 건수</div></div>
+    <div class="stat"><div class="n">${todayCount}</div><div class="l">오늘 점검일자 건수</div></div>
+    <div class="stat"><div class="n">${badCount}</div><div class="l">미흡 항목 포함 건수</div></div>
+    <div class="stat"><div class="n">${branchCount}</div><div class="l">참여 지사 수</div></div>
+  `;
+}
+
+function renderAdminList(){
+  const wrap = document.getElementById('list-wrap');
+  const rows = getFilteredRecords();
+  if(rows.length===0){ wrap.innerHTML = `<div class="empty">조건에 맞는 제출 내역이 없습니다.</div>`; return; }
+  wrap.innerHTML = `
+    <table class="list">
+      <tr><th>점검일자</th><th>지사</th><th>상호</th><th>현장주소</th><th>상태</th><th>제출시각</th><th></th></tr>
+      ${rows.map(r=>{
+        const hasBad = (r.checklist||[]).some(x=>x.result==='bad');
+        return `<tr>
+          <td class="mono">${esc(r.inspectDate)}</td>
+          <td>${esc(r.branch||'-')}</td>
+          <td>${esc(r.companyName||'-')}</td>
+          <td>${esc(r.siteAddress||'-')}</td>
+          <td><span class="badge ${hasBad?'bad':'ok'}">${hasBad?'미흡 확인 필요':'양호'}</span></td>
+          <td class="mono" style="font-size:11.5px;">${new Date(r.createdAt).toLocaleString('ko-KR')}</td>
+          <td><div class="rowbtns">
+            <button class="btn ghost" data-view="${r.id}">보기</button>
+            <button class="btn" data-edit="${r.id}">수정</button>
+            <button class="btn danger" data-del="${r.id}">삭제</button>
+          </div></td>
+        </tr>`;
+      }).join("")}
+    </table>
+  `;
+  wrap.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rec = state.records.find(r=>r.id===btn.getAttribute('data-edit'));
+      state.currentForm = JSON.parse(JSON.stringify(rec));
+      state.editingRecordId = rec.id;
+      state.view = "form";
+      renderFormInto(document.getElementById('viewport'), {fromAdmin:true});
+    });
+  });
+  wrap.querySelectorAll('[data-view]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rec = state.records.find(r=>r.id===btn.getAttribute('data-view'));
+      state.currentForm = rec;
+      state.view = "form";
+      renderFormInto(document.getElementById('viewport'), {readOnly:true, fromAdmin:true});
+    });
+  });
+  wrap.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-del');
+      if(!confirm("이 점검 보고서를 삭제하시겠습니까? 되돌릴 수 없습니다.")) return;
+      await sDelete("record:"+id);
+      state.records = state.records.filter(r=>r.id!==id);
+      renderAdminList(); renderStats();
+      toast("삭제되었습니다.");
+    });
+  });
+}
+
+render();
+</script>
+</body>
+</html>
