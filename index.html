@@ -176,7 +176,7 @@
      크기를 전부 압축된 고정값으로 바꿔서 한 장 안에 들어가게 한다(TBM 위험성평가표
      앱은 참석자 수가 가변이라 :has() 단계별 압축을 썼지만, 이 양식은 체크항목·사진
      개수가 항상 고정이라 굳이 그렇게 안 해도 된다 — 고정값 하나로 충분하다). */
-  @page{ size:A4; margin:9mm; }
+  @page{ size:A4; margin:7mm; }
   @media print{
     body{background:#fff;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
     .no-print{display:none !important;}
@@ -208,7 +208,21 @@
     .photo-box{aspect-ratio:auto !important;height:34mm !important;}
     textarea.wide{min-height:30px;font-size:10px;padding:4px 6px;}
     .sigpad{height:32px !important;}
-    .meta-footer{font-size:9px;margin-top:3px;}
+
+    /* 지난 번 수정 후에도, 내용은 1페이지 안에 다 들어가고 바닥에 여백까지 남는데도
+       불필요한 2페이지가 한 장 더 생기는 문제가 있었다 — flexbox/grid로 만든 마지막
+       요소(참석자/서명 영역, 맨 아래 메타 정보 줄)가 남은 공간에 "거의" 들어가지만
+       완전히는 안 들어갈 때, 일부 브라우저의 인쇄 엔진이 그 요소를 쪼개는 대신
+       통째로 다음 페이지로 넘겨버리는 유명한 버그성 동작 때문이었다(flex/grid
+       컨테이너는 일반 블록 요소와 달리 인쇄 시 강제로 통째로 넘어가곤 한다).
+       인쇄 시에는 이 두 영역을 flex/grid 대신 평범한 블록 레이아웃으로 바꿔서
+       그 문제를 피하고, 여백도 한 번 더 줄여 안전마진을 확보한다. */
+    .siggrid{display:block !important;}
+    .siggrid > div{margin-bottom:6px;}
+    .siggrid > div:last-child{margin-bottom:0;}
+    .meta-footer{display:block !important;font-size:8.5px;margin-top:2px;}
+    .meta-footer span{display:block;}
+    .sheet{ zoom:0.93; }
   }
 
   @media (max-width:720px){
