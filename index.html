@@ -218,9 +218,15 @@
        컨테이너는 일반 블록 요소와 달리 인쇄 시 강제로 통째로 넘어가곤 한다).
        인쇄 시에는 이 두 영역을 flex/grid 대신 평범한 블록 레이아웃으로 바꿔서
        그 문제를 피하고, 여백도 한 번 더 줄여 안전마진을 확보한다. */
-    .siggrid{display:block !important;}
-    .siggrid > div{margin-bottom:6px;}
-    .siggrid > div:last-child{margin-bottom:0;}
+    /* display:block로 바꿔서 인쇄 페이지 넘김 문제는 해결됐지만, 화면에서는 나란히
+       있던 비고/서명이 인쇄하면 위아래로 떨어져 보이는 부작용이 생겼다. flex/grid를
+       다시 쓰면 그 문제가 재발할 수 있으니(컨테이너 전체가 통째로 다음 페이지로
+       넘어가는 브라우저 버그), 일반 <table> 레이아웃(display:table/table-cell)으로
+       나란히 배치한다 — table은 flex/grid와 달리 인쇄 시 이런 통째 넘김 문제 없이
+       화면과 똑같이 좌우로 나란히 보이게 할 수 있다. */
+    .siggrid{display:table !important;width:100%;table-layout:fixed;}
+    .siggrid > div{display:table-cell;width:50%;vertical-align:top;padding-right:7px;}
+    .siggrid > div:last-child{padding-right:0;padding-left:7px;}
     .meta-footer{display:block !important;font-size:8.5px;margin-top:2px;}
     .meta-footer span{display:block;}
   }
