@@ -165,6 +165,19 @@
   .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--brand-deep);color:#fff;padding:11px 20px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:var(--shadow);z-index:100;opacity:0;transition:opacity .25s, transform .25s;pointer-events:none;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
 
+  .sig-modal-backdrop{position:fixed;inset:0;background:rgba(15,30,32,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px;}
+  .sig-modal{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;width:100%;max-width:360px;}
+  .sig-modal h3{margin:0 0 10px;font-size:15px;color:var(--brand-deep);}
+  .sig-modal canvas{width:100%;height:160px;border:1px dashed var(--line);border-radius:6px;background:#fdfefe;touch-action:none;display:block;}
+  .sig-modal .row{display:flex;gap:8px;margin-top:12px;}
+  .sig-modal .row button{flex:1;padding:9px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;font-weight:700;}
+  .sig-modal .row button.primary{background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);}
+  .sig-modal .hint{font-size:11px;color:var(--ink-soft);margin-top:8px;}
+
+  .ins-mark{cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:26px;height:20px;}
+  .ins-mark.readonly{cursor:default;}
+  .ins-mark img.sig-stamp-img{width:26px;height:20px;object-fit:contain;}
+
   footer.appfoot{text-align:center;padding:16px;font-size:11px;color:var(--ink-soft);}
 
   #print-all-root{display:none;}
@@ -179,6 +192,7 @@
   @media print{
     body{background:#fff;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
     .no-print{display:none !important;}
+    .sig-modal-backdrop{display:none !important;}
     main{padding:0;display:block;}
     .shell{max-width:none;}
     .sheet{box-shadow:none;border:none;border-radius:0;padding:0;}
@@ -198,6 +212,8 @@
     .sheet h2.formtitle{font-size:19px;margin:0 0 5px;}
     .section-label{font-size:10.5px;padding:3px 8px;margin-top:5px;}
     table.grid th, table.grid td{font-size:10px;padding:3px 6px;}
+    .ins-mark{width:18px;height:14px;}
+    .ins-mark img.sig-stamp-img{width:18px;height:14px;}
     table.check th, table.check td{font-size:9.5px;padding:3px 5px;line-height:1.2;}
     table.check td.item .note{font-size:8.3px;}
     .result-opt{font-size:9px;}
@@ -362,6 +378,7 @@ function blankForm(prefill){
     inspectDate: todayStr(),
     inspectOrg: (prefill && prefill.branch) || "",
     inspectorName: (prefill && prefill.name) || "",
+    inspectorSig: "",
     contractNo: "",
     companyName: "",
     siteAddress: "",
@@ -595,7 +612,7 @@ function sheetOuterHTML(f, dis){
       </tr>
       <tr>
         <th>점검기관(부서)</th><td><input type="text" data-field="inspectOrg" value="${esc(f.inspectOrg)}" ${dis}></td>
-        <th class="req">점검자</th><td class="sig-inline"><input type="text" data-field="inspectorName" value="${esc(f.inspectorName)}" ${dis}><span class="ins-mark">(인)</span></td>
+        <th class="req">점검자</th><td class="sig-inline"><input type="text" data-field="inspectorName" value="${esc(f.inspectorName)}" ${dis}><span class="ins-mark${dis?' readonly':''}">${f.inspectorSig?`<img class="sig-stamp-img" src="${f.inspectorSig}" alt="서명">`:'(인)'}</span></td>
         <th>계약번호</th><td><input type="text" data-field="contractNo" value="${esc(f.contractNo)}" ${dis}></td>
       </tr>
       <tr>
@@ -670,6 +687,79 @@ function renderSheet(el, f, readOnly){
   const dis = readOnly ? 'disabled' : '';
   el.innerHTML = sheetOuterHTML(f, dis);
   bindFormInputs(el, f, readOnly);
+  setupSigStamp(el, f, readOnly);
+}
+
+// "(인)" 자리를 눌러 전자서명을 하면 그 서명 이미지를 (인) 자리에 딱 맞는 작은
+// 도장 크기로 겹쳐 보이게 한다(화면·인쇄 동일). 서명 캔버스는 (인) 자체가 너무
+// 작아 그 안에서 직접 그리기 어려워서 별도의 큰 모달에서 그리게 하고, 저장된
+// 결과만 축소해서 (인) 위치에 대신 표시한다.
+function setupSigStamp(el, f, readOnly){
+  const mark = el.querySelector('.ins-mark');
+  if(!mark || readOnly) return;
+  mark.onclick = ()=>{
+    openSignatureModal(f.inspectorSig, (dataUrl)=>{
+      f.inspectorSig = dataUrl;
+      mark.innerHTML = dataUrl ? `<img class="sig-stamp-img" src="${dataUrl}" alt="서명">` : '(인)';
+    });
+  };
+}
+
+function openSignatureModal(existingSig, onSave){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'sig-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="sig-modal">
+      <h3>전자서명</h3>
+      <canvas width="320" height="160"></canvas>
+      <div class="hint">여기에 서명하면 "(인)" 자리에 작은 도장 크기로 표시됩니다.</div>
+      <div class="row">
+        <button type="button" data-sig-clear>지우기</button>
+        <button type="button" data-sig-cancel>취소</button>
+        <button type="button" class="primary" data-sig-save>저장</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+
+  const canvas = backdrop.querySelector('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.strokeStyle = '#1b2a2e';
+  let hasDrawing = false;
+  if(existingSig){
+    const img = new Image();
+    img.onload = ()=>ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    img.src = existingSig;
+    hasDrawing = true;
+  }
+  let drawing=false, last=null;
+  function pos(e){
+    const r = canvas.getBoundingClientRect();
+    const cx = (e.touches?e.touches[0].clientX:e.clientX) - r.left;
+    const cy = (e.touches?e.touches[0].clientY:e.clientY) - r.top;
+    return {x:cx*canvas.width/r.width, y:cy*canvas.height/r.height};
+  }
+  function start(e){ e.preventDefault(); drawing=true; hasDrawing=true; last=pos(e); }
+  function move(e){ if(!drawing) return; e.preventDefault(); const p=pos(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; }
+  function end(){ drawing=false; }
+  canvas.addEventListener('mousedown', start);
+  canvas.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+  canvas.addEventListener('touchstart', start, {passive:false});
+  canvas.addEventListener('touchmove', move, {passive:false});
+  canvas.addEventListener('touchend', end);
+
+  function close(){ document.body.removeChild(backdrop); }
+  backdrop.querySelector('[data-sig-clear]').onclick = ()=>{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    hasDrawing = false;
+  };
+  backdrop.querySelector('[data-sig-cancel]').onclick = close;
+  backdrop.addEventListener('click', (e)=>{ if(e.target === backdrop) close(); });
+  backdrop.querySelector('[data-sig-save]').onclick = ()=>{
+    const dataUrl = hasDrawing ? canvas.toDataURL('image/png') : '';
+    onSave(dataUrl);
+    close();
+  };
 }
 
 function bindFormInputs(el, f, readOnly){
