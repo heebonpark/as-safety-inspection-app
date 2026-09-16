@@ -514,7 +514,9 @@ function renderFormInto(root, opts){
     <div class="sheet" id="sheet"></div>
     ${!fromAdmin && state.role==='inspector' ? `<div class="panel" id="mine-panel" style="display:none;"></div>` : ''}
   `;
-  renderSheet(document.getElementById('sheet'), f, readOnly);
+  // 인쇄/제출 같은 핵심 버튼은 아래 시트(양식 본문) 렌더링보다 먼저 연결한다 — 혹시
+  // 시트 쪽 렌더링(체크리스트·사진·서명판)에서 예외가 나더라도 인쇄 버튼 자체는 항상
+  // 눌리게 하기 위함이다("작성 화면에서만 인쇄가 안 눌린다"는 문제의 재발 방지책).
   document.getElementById('btn-print').onclick = ()=>window.print();
   if(!readOnly){
     document.getElementById('btn-submit').onclick = submitForm;
@@ -530,6 +532,12 @@ function renderFormInto(root, opts){
       renderMineListInto(panel);
       panel.style.display='block';
     };
+  }
+  try{
+    renderSheet(document.getElementById('sheet'), f, readOnly);
+  }catch(e){
+    console.error("renderSheet 실패", e);
+    toast("양식 화면을 표시하는 중 문제가 있었습니다. 새로고침 후 다시 시도해 주세요.");
   }
 }
 
