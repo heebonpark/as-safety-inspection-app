@@ -100,6 +100,9 @@
   table.grid th{background:#f3f6f5;color:var(--brand-deep);font-weight:700;text-align:left;white-space:nowrap;}
   table.grid td input[type=text], table.grid td input[type=date]{width:100%;border:none;background:transparent;font-size:13px;padding:3px 2px;color:var(--ink);}
   table.grid td input:focus{outline:none;background:#f6faf9;border-radius:4px;}
+  table.grid td select{width:100%;font-size:13px;color:var(--ink);}
+  table.grid td select:disabled{-webkit-appearance:none;-moz-appearance:none;appearance:none;border:none;background:transparent;opacity:1;-webkit-text-fill-color:var(--ink);padding:3px 2px;}
+  table.check td.action input:disabled::placeholder{color:transparent;}
 
   .section-label{font-size:12.5px;font-weight:900;color:#fff;background:var(--brand-deep);padding:6px 10px;border-radius:6px 6px 0 0;display:inline-block;margin-bottom:0;}
 
@@ -183,12 +186,13 @@
     input::placeholder, textarea::placeholder{color:transparent !important;}
     input[type=text], textarea{border:none !important;background:transparent !important;overflow:visible !important;}
     table.check td.action input{border-bottom:1px dashed #999 !important;}
-    table.grid td select{appearance:none;-webkit-appearance:none;-moz-appearance:none;border:none !important;background:transparent !important;padding:1px 2px !important;color:#1b2a2e !important;opacity:1 !important;-webkit-text-fill-color:#1b2a2e !important;}
+    table.grid td select{-webkit-appearance:none;-moz-appearance:none;appearance:none;border:none !important;background:transparent !important;padding:1px 2px !important;font:inherit !important;color:#1b2a2e !important;opacity:1 !important;-webkit-text-fill-color:#1b2a2e !important;}
     .formtitle-sub{display:none !important;}
     table{page-break-inside:auto;}
-    tr, td, th, .section-label, .photo-cell{page-break-inside:avoid;}
+    tr, td, th, .section-label, .photo-cell, .remarks-box{page-break-inside:avoid;}
     table.grid th, table.grid td, table.check th, table.check td, textarea.wide{border:1px solid #333 !important;}
     .photo-box{border:1px solid #333 !important;}
+    .photo-caption, .remarks-box{border-color:#333 !important;}
     .photo-box input[type=file]{display:none !important;}
 
     .sheet h2.formtitle{font-size:19px;margin:0 0 5px;}
@@ -201,7 +205,7 @@
     .photo-caption{font-size:9px !important;padding:2px !important;}
     .photo-cell{padding:5px;gap:3px;}
     .photo-cell .plabel{font-size:9px;}
-    .photo-box{aspect-ratio:auto !important;height:60mm !important;}
+    .photo-box{aspect-ratio:auto !important;height:56mm !important;}
     .remarks-box{padding:5px 8px;margin-bottom:6px;}
     textarea.wide{min-height:16mm;font-size:9.5px;padding:3px 5px;}
     .meta-footer{font-size:8px;margin-top:2px;}
@@ -256,7 +260,7 @@ const DEFAULT_HQ = "강북강원본부";
 // 비워두면 되고(예: 사다리 작업이 없으면 2~4번은 비움), 현장사진도 그 항목만
 // 자동으로 빈 칸으로 표시된다 — AS 방문/공사현장 어느 쪽이든 같은 화면 하나로 쓴다.
 const CHECK_ITEMS = [
-  { k:"helmet", label:"안전모 착용", note:"※상시 적용(협력사는 상시 착용)", photo:"안전모 착용" },
+  { k:"helmet", label:"안전모 착용", note:"※사다리 작업 시 필수 착용(협력사 포함 상시 착용)", photo:"안전모 착용" },
   { k:"outrigger", label:"사다리 아웃트리거(①1포인트 이상 필수 사용 ②4개 설치 여부), 사다리 미끄럼방지(논슬립패드/지주끝 고무) 상태", note:"", photo:"사다리 상태(논슬립패드·아웃트리거 부착)" },
   { k:"hook", label:"A형 사다리 안전고리 정상 여부 확인", note:"※협력사 제외", photo:"사다리 상태(안전고리)" },
   { k:"rule", label:"사다리 안전수칙 준수(발판위치 85cm 이하)", note:"3단 확장 후: 최상부발판·하단 디딤대 작업 금지 / 85cm 초과: 협력사 이관", photo:"사다리 작업 중인 사진(지면부터 전신 촬영)" },
@@ -600,7 +604,7 @@ function sheetOuterHTML(f, dis){
     </table>
 
     <span class="section-label">현장 사진</span>
-    <div class="photo-caption" style="text-align:center;font-size:10.5px;color:var(--red);font-weight:700;background:#fdf1ef;border:1px solid var(--line);border-top:none;padding:4px;">${PHOTO_CAPTION}</div>
+    <div class="photo-caption" style="text-align:center;font-size:10.5px;color:var(--red);font-weight:700;background:#fdf1ef;border:1px solid var(--line);padding:4px;">${PHOTO_CAPTION}</div>
     <div class="photo-grid">
       ${CHECK_ITEMS.map((it,i)=>photoCellHTML(it, i, f.checklist[i].photo, dis)).join("")}
     </div>
