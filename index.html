@@ -208,7 +208,6 @@
     .photo-cell .plabel{font-size:9px;}
     .photo-box{aspect-ratio:auto !important;height:40mm !important;}
     textarea.wide{min-height:24px;font-size:9.5px;padding:3px 5px;}
-    .sigpad{height:30px !important;}
 
     /* 지난 번 수정 후에도, 내용은 1페이지 안에 다 들어가고 바닥에 여백까지 남는데도
        불필요한 2페이지가 한 장 더 생기는 문제가 있었다 — flexbox/grid로 만든 마지막
@@ -218,12 +217,18 @@
        컨테이너는 일반 블록 요소와 달리 인쇄 시 강제로 통째로 넘어가곤 한다).
        인쇄 시에는 이 두 영역을 flex/grid 대신 평범한 블록 레이아웃으로 바꿔서
        그 문제를 피하고, 여백도 한 번 더 줄여 안전마진을 확보한다. */
-    /* display:table로 나란히 배치해봤다가 인쇄 버튼이 아예 동작하지 않는 문제가
-       생겨서(정확한 원인 파악 전) 일단 인쇄가 확실히 되던 display:block으로 되돌린다.
-       비고/서명이 위아래로 보이는 건 인쇄가 아예 안 되는 것보다는 나은 상태다. */
-    .siggrid{display:block !important;}
-    .siggrid > div{margin-bottom:6px;}
-    .siggrid > div:last-child{margin-bottom:0;}
+    /* display:table로 나란히 배치했더니 인쇄 버튼이 아예 동작하지 않는 문제가 있어서
+       (정확한 원인은 못 밝혔지만) display:table/flex/grid를 전부 피하고, 훨씬 오래되고
+       인쇄에서도 안전한 float으로 나란히 배치한다. float은 화면과 인쇄 양쪽에서 문제
+       없이 잘 동작해온 가장 기본적인 CSS 레이아웃 방식이다. table/grid처럼 두 칸
+       높이가 자동으로 맞춰지지는 않으니, 대신 두 칸 다 똑같은 고정 높이(20mm)를 줘서
+       "보기" 화면처럼 나란히 + 높이도 맞게 보이도록 한다. */
+    .siggrid{display:block !important;overflow:hidden;}
+    .siggrid > div{float:left;width:48%;box-sizing:border-box;}
+    .siggrid > div:first-child{margin-right:4%;}
+    .siggrid textarea.wide{height:20mm;min-height:20mm;}
+    .siggrid .sigcell{height:20mm;overflow:hidden;}
+    .siggrid .sigpad{height:20mm !important;}
     .meta-footer{display:block !important;font-size:8.5px;margin-top:2px;}
     .meta-footer span{display:block;}
   }
