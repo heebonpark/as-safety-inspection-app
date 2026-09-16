@@ -130,7 +130,6 @@
   .photo-clear{border:none;background:transparent;color:var(--red);font-size:11px;font-weight:700;text-decoration:underline;padding:0;align-self:center;}
 
   .remarks-box{margin-bottom:14px;border:1px solid var(--line);border-top:none;border-radius:0 0 6px 6px;padding:10px 12px;}
-  .remarks-box label.mini{display:block;font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
   td.sig-inline{display:flex;align-items:center;gap:4px;}
   td.sig-inline input{flex:1;min-width:0;}
   td.sig-inline .ins-mark{flex:none;color:var(--ink-soft);}
@@ -204,7 +203,6 @@
     .photo-cell .plabel{font-size:9px;}
     .photo-box{aspect-ratio:auto !important;height:60mm !important;}
     .remarks-box{padding:5px 8px;margin-bottom:6px;}
-    .remarks-box label.mini{font-size:9px;margin-bottom:2px;}
     textarea.wide{min-height:16mm;font-size:9.5px;padding:3px 5px;}
     .meta-footer{font-size:8px;margin-top:2px;}
   }
@@ -609,7 +607,6 @@ function sheetOuterHTML(f, dis){
 
     <span class="section-label">비고</span>
     <div class="remarks-box" style="margin-top:0;">
-      <label class="mini">비고</label>
       <textarea class="wide" data-field="remarks" style="min-height:40px;" ${dis}>${esc(f.remarks)}</textarea>
     </div>
 
