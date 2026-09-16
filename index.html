@@ -366,6 +366,7 @@ const state = {
   currentForm: null,
   records: [],
   adminFilter: { q:"", branch:"", from:"", to:"" },
+  selectedIds: new Set(),
 };
 
 function blankForm(prefill){
@@ -848,13 +849,30 @@ async function renderAdminInto(root){
         <input type="date" id="f-to">
       </div>
       <div class="hint" style="margin:-2px 0 10px;">전체 인쇄·ZIP·CSV는 위 검색/필터 조건이 적용된 건에만 적용됩니다.</div>
+      <div class="actionbar no-print" style="padding:0 0 10px;border:none;">
+        <div class="title" id="selected-count" style="font-size:12.5px;color:var(--ink-soft);">0건 선택됨</div>
+        <div class="btns">
+          <button class="btn" id="btn-print-selected">🖨 선택 인쇄/PDF</button>
+          <button class="btn" id="btn-zip-selected">🗜 선택 압축 다운로드</button>
+        </div>
+      </div>
       <div id="list-wrap"></div>
     </div>
   `;
   document.getElementById('btn-refresh').onclick = async ()=>{ await loadRecords(); renderAdminList(); renderStats(); };
   document.getElementById('btn-export').onclick = exportCSV;
-  document.getElementById('btn-print-all').onclick = printAllRecords;
-  document.getElementById('btn-zip').onclick = exportZip;
+  document.getElementById('btn-print-all').onclick = ()=>printRecords(getFilteredRecords());
+  document.getElementById('btn-zip').onclick = ()=>exportZip(getFilteredRecords(), `AS_안전점검_모음_${todayStr()}.zip`);
+  document.getElementById('btn-print-selected').onclick = ()=>{
+    const rows = state.records.filter(r=>state.selectedIds.has(r.id));
+    if(rows.length===0){ toast("선택된 보고서가 없습니다. 목록에서 체크해 주세요."); return; }
+    printRecords(rows);
+  };
+  document.getElementById('btn-zip-selected').onclick = ()=>{
+    const rows = state.records.filter(r=>state.selectedIds.has(r.id));
+    if(rows.length===0){ toast("선택된 보고서가 없습니다. 목록에서 체크해 주세요."); return; }
+    exportZip(rows, `AS_안전점검_선택${rows.length}건_${todayStr()}.zip`);
+  };
   ['f-q','f-branch','f-from','f-to'].forEach(id=>{
     document.getElementById(id).addEventListener('input', ()=>{
       state.adminFilter = {
@@ -910,8 +928,7 @@ function exportCSV(){
   downloadBlob(new Blob([csvContentFor(rows)], {type:'text/csv;charset=utf-8;'}), `AS_안전점검_${todayStr()}.csv`);
 }
 
-function printAllRecords(){
-  const rows = getFilteredRecords();
+function printRecords(rows){
   if(rows.length===0){ toast("인쇄할 내역이 없습니다."); return; }
   document.querySelectorAll('#print-all-root').forEach(n=>n.remove());
   const container = document.createElement('div');
@@ -947,9 +964,8 @@ body{background:#fff;padding:16px;}
 </body></html>`;
 }
 
-async function exportZip(){
+async function exportZip(rows, filename){
   if(typeof JSZip === 'undefined'){ toast("압축 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."); return; }
-  const rows = getFilteredRecords();
   if(rows.length===0){ toast("압축할 내역이 없습니다."); return; }
   toast(`${rows.length}건을 압축하는 중입니다...`);
   const zip = new JSZip();
@@ -959,9 +975,9 @@ async function exportZip(){
     if(used[base]!=null){ used[base]++; base += '_'+used[base]; } else used[base]=0;
     zip.file(`${base}.html`, buildStaticDocument(r));
   });
-  zip.file(`전체_제출내역_${todayStr()}.csv`, csvContentFor(rows));
+  zip.file(`제출내역_${todayStr()}.csv`, csvContentFor(rows));
   const blob = await zip.generateAsync({type:"blob"});
-  downloadBlob(blob, `AS_안전점검_모음_${todayStr()}.zip`);
+  downloadBlob(blob, filename);
   toast("압축파일 다운로드가 시작되었습니다.");
 }
 
@@ -983,13 +999,15 @@ function renderStats(){
 function renderAdminList(){
   const wrap = document.getElementById('list-wrap');
   const rows = getFilteredRecords();
+  updateSelectedCount();
   if(rows.length===0){ wrap.innerHTML = `<div class="empty">조건에 맞는 제출 내역이 없습니다.</div>`; return; }
   wrap.innerHTML = `
     <table class="list">
-      <tr><th>점검일자</th><th>지사</th><th>상호</th><th>현장주소</th><th>상태</th><th>제출시각</th><th></th></tr>
+      <tr><th style="width:26px;"><input type="checkbox" id="select-all-rows"></th><th>점검일자</th><th>지사</th><th>상호</th><th>현장주소</th><th>상태</th><th>제출시각</th><th></th></tr>
       ${rows.map(r=>{
         const hasBad = (r.checklist||[]).some(x=>x.result==='bad');
         return `<tr>
+          <td><input type="checkbox" class="row-check" data-id="${r.id}" ${state.selectedIds.has(r.id)?'checked':''}></td>
           <td class="mono">${esc(r.inspectDate)}</td>
           <td>${esc(r.branch||'-')}</td>
           <td>${esc(r.companyName||'-')}</td>
@@ -1005,6 +1023,22 @@ function renderAdminList(){
       }).join("")}
     </table>
   `;
+  const selectAllCb = wrap.querySelector('#select-all-rows');
+  selectAllCb.checked = rows.every(r=>state.selectedIds.has(r.id));
+  selectAllCb.onchange = ()=>{
+    rows.forEach(r=>{
+      if(selectAllCb.checked) state.selectedIds.add(r.id); else state.selectedIds.delete(r.id);
+    });
+    renderAdminList();
+  };
+  wrap.querySelectorAll('.row-check').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const id = cb.getAttribute('data-id');
+      if(cb.checked) state.selectedIds.add(id); else state.selectedIds.delete(id);
+      updateSelectedCount();
+      selectAllCb.checked = rows.every(r=>state.selectedIds.has(r.id));
+    });
+  });
   wrap.querySelectorAll('[data-edit]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const rec = state.records.find(r=>r.id===btn.getAttribute('data-edit'));
@@ -1028,10 +1062,16 @@ function renderAdminList(){
       if(!confirm("이 점검 보고서를 삭제하시겠습니까? 되돌릴 수 없습니다.")) return;
       await sDelete("record:"+id);
       state.records = state.records.filter(r=>r.id!==id);
+      state.selectedIds.delete(id);
       renderAdminList(); renderStats();
       toast("삭제되었습니다.");
     });
   });
+}
+
+function updateSelectedCount(){
+  const el = document.getElementById('selected-count');
+  if(el) el.textContent = `${state.selectedIds.size}건 선택됨`;
 }
 
 render();
