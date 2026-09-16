@@ -171,6 +171,12 @@
   #print-all-root .print-page{page-break-after:always;margin-bottom:24px;}
   #print-all-root .print-page:last-child{page-break-after:auto;}
 
+  /* 사진 4장(2x2)이 화면용 크기(가로세로비 4:3) 그대로 인쇄되면 그것만으로 A4 한 장을
+     거의 다 채워서 항상 2페이지로 넘어갔다 — 인쇄용으로는 여백을 줄이고, 표/글자/사진
+     크기를 전부 압축된 고정값으로 바꿔서 한 장 안에 들어가게 한다(TBM 위험성평가표
+     앱은 참석자 수가 가변이라 :has() 단계별 압축을 썼지만, 이 양식은 체크항목·사진
+     개수가 항상 고정이라 굳이 그렇게 안 해도 된다 — 고정값 하나로 충분하다). */
+  @page{ size:A4; margin:9mm; }
   @media print{
     body{background:#fff;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
     .no-print{display:none !important;}
@@ -184,11 +190,25 @@
     table.grid td select{appearance:none;-webkit-appearance:none;-moz-appearance:none;border:none !important;background:transparent !important;padding:1px 2px !important;color:#1b2a2e !important;opacity:1 !important;-webkit-text-fill-color:#1b2a2e !important;}
     .formtitle-sub{display:none !important;}
     table{page-break-inside:auto;}
-    tr, td, th, .section-label, .photo-cell{page-break-inside:avoid;}
+    tr, td, th, .section-label, .photo-cell, .photo-grid{page-break-inside:avoid;}
     table.grid th, table.grid td, table.check th, table.check td, .sigbox, textarea.wide{border:1px solid #333 !important;}
     .sigbox{border-radius:0 !important;}
     .photo-box{border:1px solid #333 !important;}
     .photo-box input[type=file]{display:none !important;}
+
+    .sheet h2.formtitle{font-size:15px;margin:0 0 3px;}
+    .section-label{font-size:10.5px;padding:3px 8px;margin-top:6px;}
+    table.grid th, table.grid td{font-size:10px;padding:3px 6px;}
+    table.check th, table.check td{font-size:9.6px;padding:3px 5px;}
+    .result-opt{font-size:9.5px;}
+    table.check td.action input{font-size:9.5px;}
+    .photo-caption{font-size:9px !important;padding:2px !important;}
+    .photo-cell{padding:5px;gap:3px;}
+    .photo-cell .plabel{font-size:9.5px;}
+    .photo-box{aspect-ratio:auto !important;height:34mm !important;}
+    textarea.wide{min-height:30px;font-size:10px;padding:4px 6px;}
+    .sigpad{height:32px !important;}
+    .meta-footer{font-size:9px;margin-top:3px;}
   }
 
   @media (max-width:720px){
