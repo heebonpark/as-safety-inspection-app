@@ -139,6 +139,11 @@
   .photo-box img{width:100%;height:100%;object-fit:cover;}
   .photo-box .ph{font-size:12px;color:var(--ink-soft);text-align:center;padding:0 10px;}
   .photo-box input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+  table.check td.action { position: relative; }
+  .btn-stt {
+    position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; padding: 4px; font-size: 14px; cursor: pointer;
+  }
   .photo-clear{border:none;background:transparent;color:var(--red);font-size:11px;font-weight:700;text-decoration:underline;padding:0;align-self:center;}
 
   .remarks-box{margin-bottom:14px;border:1px solid var(--line);border-radius:0 0 6px 6px;padding:10px 12px;}
@@ -240,7 +245,12 @@
     main{padding:0;display:block;}
     .shell{max-width:none;}
     .sheet{box-shadow:none;border:none;border-radius:0;padding:0;}
-    .photo-clear{display:none !important;}
+    table.check td.action { position: relative; }
+  .btn-stt {
+    position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; padding: 4px; font-size: 14px; cursor: pointer;
+  }
+  .photo-clear{display:none !important;}
     input::placeholder, textarea::placeholder{color:transparent !important;}
     input[type=text], textarea{border:none !important;background:transparent !important;overflow:visible !important;}
     table.check td.action input{border-bottom:none !important;}
@@ -461,6 +471,49 @@ function compressImageFile(file){
 }
 
 /* ---------------- app state ---------------- */
+function updateOfflineBadge(){
+  const q = JSON.parse(localStorage.getItem('offlineQueue')||'[]');
+  let badge = document.getElementById('offline-badge');
+  if(!badge) {
+    badge = document.createElement('div');
+    badge.id = 'offline-badge';
+    badge.style.cssText = 'position:fixed;bottom:16px;right:16px;background:var(--red);color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:700;z-index:9999;box-shadow:0 4px 10px rgba(0,0,0,0.2);cursor:pointer;';
+    badge.onclick = syncOfflineQueue;
+    document.body.appendChild(badge);
+  }
+  if(q.length > 0){
+    badge.textContent = `📡 미제출 보고서 ${q.length}건 (터치하여 재시도)`;
+    badge.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+async function syncOfflineQueue(){
+  if(!navigator.onLine) return;
+  const q = JSON.parse(localStorage.getItem('offlineQueue')||'[]');
+  if(q.length === 0) return;
+  toast(`오프라인 보고서 ${q.length}건을 전송합니다...`);
+  let successCount = 0;
+  for(let i=q.length-1; i>=0; i--){
+    const f = q[i];
+    const ok = await sSet("record:" + f.id, JSON.stringify(f));
+    if(ok){
+      q.splice(i, 1);
+      successCount++;
+    }
+  }
+  localStorage.setItem('offlineQueue', JSON.stringify(q));
+  updateOfflineBadge();
+  if(successCount > 0){
+    toast(`${successCount}건이 성공적으로 전송되었습니다.`);
+    if(q.length === 0 && state.view === 'list') { await loadRecords(); render(); }
+  }
+}
+
+window.addEventListener('online', syncOfflineQueue);
+setInterval(updateOfflineBadge, 5000);
+
 const state = {
   view: "login",           // login | form | admin
   role: null,              // inspector | admin
@@ -909,7 +962,7 @@ function sheetOuterHTML(f, dis){
               <label class="result-opt bad"><input type="radio" name="ck-${i}" value="bad" data-ck-result="${i}" ${f.checklist[i].result==='bad'?'checked':''} ${dis}> 미흡</label>
             </div>
           </td>
-          <td class="action"><input type="text" data-ck-note="${i}" value="${esc(f.checklist[i].note)}" placeholder="미흡 시 보완사항" ${dis}></td>
+          <td class="action"><input type="text" data-ck-note="${i}" value="${esc(f.checklist[i].note)}" placeholder="미흡 시 보완사항" ${dis}>${!dis ? `<button type="button" class="btn-stt" data-ck-stt="${i}" title="음성입력">🎤</button>` : ''}</td>
         </tr>
       `).join("")}
     </table>
@@ -946,8 +999,8 @@ function photoCellHTML(item, idx, dataUrl, dis){
     <div class="photo-cell">
       <div class="plabel">${idx+1}. ${esc(item.photo)}</div>
       <div class="photo-box" data-photo-box="${idx}">
-        ${dataUrl ? `<img src="${dataUrl}" alt="">` : `<div class="ph">탭하여 사진 촬영/첨부</div>`}
-        ${!disabled ? `<input type="file" accept="image/*" capture="environment" data-photo-input="${idx}">` : ''}
+        ${dataUrl ? `<img src="${dataUrl}" alt="" data-photo-annotate="${idx}" style="cursor:pointer;" title="클릭하여 그리기">` : `<div class="ph">탭하여 사진 촬영/첨부</div>`}
+        ${(!disabled && !dataUrl) ? `<input type="file" accept="image/*" capture="environment" data-photo-input="${idx}">` : ''}
       </div>
       ${dataUrl && !disabled ? `<button type="button" class="photo-clear" data-photo-clear="${idx}">사진 지우기</button>` : ''}
     </div>
@@ -981,6 +1034,77 @@ function setupSigStamp(el, f, readOnly){
       f.inspectorSig = dataUrl;
       mark.innerHTML = dataUrl ? `<img class="sig-stamp-img" src="${dataUrl}" alt="서명">` : '(인)';
     });
+  };
+}
+
+function openAnnotationModal(src, onSave){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'sig-modal-backdrop';
+  backdrop.style.zIndex = '9999';
+  backdrop.innerHTML = `
+    <div class="sig-modal" style="width:90%;max-width:500px;text-align:center;">
+      <h3 style="margin-top:0;">사진에 그리기</h3>
+      <div class="hint">손가락으로 드래그하여 붉은 펜으로 표시할 수 있습니다.</div>
+      <div style="position:relative;display:inline-block;width:100%;max-width:100%;touch-action:none;border:1px solid var(--line);">
+        <img id="anno-bg" src="${src}" style="display:block;width:100%;max-height:60vh;object-fit:contain;">
+        <canvas id="anno-canvas" style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;touch-action:none;"></canvas>
+      </div>
+      <div class="row" style="margin-top:16px;">
+        <button type="button" data-anno-clear>지우기</button>
+        <button type="button" data-anno-cancel>취소</button>
+        <button type="button" class="primary" data-anno-save>적용</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  
+  const img = backdrop.querySelector('#anno-bg');
+  const canvas = backdrop.querySelector('#anno-canvas');
+  const ctx = canvas.getContext('2d');
+  
+  let drawing = false;
+  
+  img.onload = ()=>{
+    canvas.width = img.clientWidth;
+    canvas.height = img.clientHeight;
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  };
+  
+  function pos(e){
+    const r = canvas.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: cx - r.left, y: cy - r.top };
+  }
+  
+  function start(e){ e.preventDefault(); drawing = true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+  function move(e){ e.preventDefault(); if(!drawing) return; const p=pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }
+  function end(e){ e.preventDefault(); drawing = false; }
+  
+  canvas.addEventListener('mousedown', start);
+  canvas.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+  canvas.addEventListener('touchstart', start, {passive:false});
+  canvas.addEventListener('touchmove', move, {passive:false});
+  window.addEventListener('touchend', end);
+  
+  backdrop.querySelector('[data-anno-clear]').onclick = ()=>{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+  };
+  backdrop.querySelector('[data-anno-cancel]').onclick = ()=>{
+    document.body.removeChild(backdrop);
+  };
+  backdrop.querySelector('[data-anno-save]').onclick = ()=>{
+    const comp = document.createElement('canvas');
+    comp.width = img.naturalWidth;
+    comp.height = img.naturalHeight;
+    const cx = comp.getContext('2d');
+    cx.drawImage(img, 0, 0);
+    cx.drawImage(canvas, 0, 0, comp.width, comp.height);
+    onSave(comp.toDataURL('image/jpeg', 0.9));
+    document.body.removeChild(backdrop);
   };
 }
 
@@ -1069,8 +1193,41 @@ function bindFormInputs(el, f, readOnly){
   el.querySelectorAll('[data-ck-result]').forEach(inp=>{
     inp.addEventListener('change', ()=>{ f.checklist[Number(inp.getAttribute('data-ck-result'))].result = inp.value; scheduleDraftSave(f); });
   });
+  el.querySelectorAll('[data-ck-stt]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const idx = btn.getAttribute('data-ck-stt');
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if(!SpeechRecognition){ toast("이 브라우저에서는 음성 인식을 지원하지 않습니다."); return; }
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'ko-KR';
+      recognition.interimResults = false;
+      recognition.onstart = ()=> toast("말씀해 주세요... (음성 인식 중)");
+      recognition.onresult = (event)=>{
+        const text = event.results[0][0].transcript;
+        const inp = el.querySelector(`[data-ck-note="${idx}"]`);
+        if(inp) {
+          inp.value = (inp.value + " " + text).trim();
+          f.checklist[idx].note = inp.value;
+          scheduleDraftSave(f);
+        }
+      };
+      recognition.onerror = (e)=> toast("음성 인식 오류: " + e.error);
+      recognition.start();
+    };
+  });
   el.querySelectorAll('[data-ck-note]').forEach(inp=>{
     inp.addEventListener('input', ()=>{ f.checklist[Number(inp.getAttribute('data-ck-note'))].note = inp.value; scheduleDraftSave(f); });
+  });
+  el.querySelectorAll('[data-photo-annotate]').forEach(img=>{
+    img.addEventListener('click', ()=>{
+      if(readOnly) return;
+      openAnnotationModal(img.src, (newUrl)=>{
+        const idx = Number(img.getAttribute('data-photo-annotate'));
+        f.checklist[idx].photo = newUrl;
+        renderSheet(el, f, readOnly);
+        scheduleDraftSave(f);
+      });
+    });
   });
   el.querySelectorAll('[data-photo-input]').forEach(inp=>{
     inp.addEventListener('change', async ()=>{
@@ -2158,6 +2315,7 @@ async function renderVerifyView(id){
   // 필요 없음.
   const verifyId = new URLSearchParams(location.search).get('verify');
   if(verifyId){ await renderVerifyView(verifyId); return; }
+  updateOfflineBadge();
   state.vendors = await loadVendors();
   render();
 })();
