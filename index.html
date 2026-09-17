@@ -82,6 +82,8 @@
   .btn.solid:hover{background:var(--brand);}
   .btn.danger{color:var(--red);border-color:#e6c3bd;}
   .btn.danger:hover{background:#fdf1ef;border-color:var(--red);}
+  .btn.warn{color:#8a5a12;border-color:#e7c88e;background:#fdf3e2;}
+  .btn.warn:hover{background:#fbe9c9;}
   .btn.ghost{background:transparent;border-color:transparent;color:var(--ink-soft);}
 
   .formtabs{display:flex;gap:6px;margin-bottom:14px;}
@@ -184,6 +186,7 @@
   table.list .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.8px;font-weight:700;}
   .badge.ok{background:#e4f3ec;color:var(--green);}
   .badge.bad{background:#fbe9e6;color:var(--red);}
+  .badge.done{background:#e7edfb;color:#2851a3;}
   .rowbtns{display:flex;gap:6px;}
   .rowbtns button{padding:5px 10px;font-size:11.5px;}
   .empty{text-align:center;padding:40px 10px;color:var(--ink-soft);font-size:13px;}
@@ -466,7 +469,7 @@ const state = {
   editingRecordId: null,
   currentForm: null,
   records: [],
-  adminFilter: { q:"", branch:"", from:"", to:"", badOnly:false, missingPhoto:false },
+  adminFilter: { q:"", branch:"", from:"", to:"", badOnly:false, missingPhoto:false, actionPending:false },
   selectedIds: new Set(),
   vendors: [], // [{name, teams:[...]}] — 협력사/공사팀, 관리자가 등록/수정
 };
@@ -562,6 +565,41 @@ async function saveBranchAdminPw(map){
 // 로그인 판정을 할 위험이 있음).
 function scopedRecords(){
   return state.adminScope ? state.records.filter(r=>r.branch===state.adminScope) : state.records;
+}
+
+/* 미흡 발생 자동 알림(웹훅) — Slack/Discord 등 "수신 웹훅" URL 하나를 관리자가
+   등록해두면, 미흡 항목이 있는 보고서가 제출될 때마다 그 URL로 알림을 보낸다.
+   어느 서비스인지 미리 알 수 없어 text(Slack)와 content(Discord) 필드를 함께
+   보낸다 — 대부분의 웹훅 수신측은 모르는 필드는 그냥 무시하므로 안전하다. */
+async function loadNotifyConfig(){
+  const raw = await sGet("config:notifyWebhook");
+  if(raw){ try{ const p = JSON.parse(raw); if(p && typeof p==='object') return { url:'', enabled:false, ...p }; }catch(e){} }
+  return { url:'', enabled:false };
+}
+async function saveNotifyConfig(cfg){
+  await sSet("config:notifyWebhook", JSON.stringify(cfg));
+}
+function buildBadResultMessage(rec){
+  const badItems = (rec.checklist||[]).map((c,i)=> c.result==='bad' ? `${i+1}. ${(CHECK_ITEMS[i]&&CHECK_ITEMS[i].label)||''}${c.note?` — ${c.note}`:''}` : null).filter(Boolean);
+  const verifyUrl = `${QR_VERIFY_BASE_URL}?verify=${rec.id}`;
+  return `⚠ 안전점검 미흡 발생\n지사: ${rec.branch||'-'} / 상호: ${rec.companyName||'-'}\n현장: ${rec.siteAddress||'-'}\n점검자: ${rec.inspectorName||'-'} (${rec.inspectDate||''})\n미흡 항목:\n${badItems.join('\n')}\n\n확인: ${verifyUrl}`;
+}
+async function sendWebhook(url, message){
+  await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: message, content: message }),
+  });
+}
+// 제출 흐름 자체는 알림 성공/실패와 무관하게 이미 끝난 뒤이므로, 여기서 나는 에러는
+// 조용히 삼킨다(사용자에게 "제출은 됐는데 알림만 실패"라는 걸 굳이 보여줄 필요 없음 —
+// 관리자가 "테스트 전송"으로 웹훅 자체가 살아있는지는 별도로 확인할 수 있음).
+async function sendBadResultNotification(rec){
+  try{
+    const cfg = await loadNotifyConfig();
+    if(!cfg.enabled || !cfg.url) return;
+    await sendWebhook(cfg.url, buildBadResultMessage(rec));
+  }catch(e){ /* 무시 */ }
 }
 
 function render(){
@@ -1057,6 +1095,15 @@ async function submitForm(){
   if(!f.visitType){ toast("점검방식(방문/영상통화)을 선택해 주세요."); return; }
   if(!f.caseType){ toast("구분(AS/공사현장)을 선택해 주세요."); return; }
   if(!f.siteAddress){ toast("현장주소를 입력해 주세요."); return; }
+  // 체크리스트 항목이 비어있는 채로(혹은 사진 없이) 제출되던 것을 막는다 — "확인 안 한
+  // 항목이 없다"를 실제로 보장하려면 결과 선택·사진 첨부가 전부 필수여야 하고, 미흡으로
+  // 체크한 항목은 화면 안내 문구("미흡 시 보완사항 기재")대로 보완사항도 필수로 둔다.
+  const missingResultIdx = f.checklist.findIndex(c=>!c.result);
+  if(missingResultIdx >= 0){ toast(`${missingResultIdx+1}번 점검항목의 결과(양호/미흡)를 선택해 주세요.`); return; }
+  const missingPhotoIdx = f.checklist.findIndex(c=>!c.photo);
+  if(missingPhotoIdx >= 0){ toast(`${missingPhotoIdx+1}번 점검항목의 현장사진을 첨부해 주세요.`); return; }
+  const missingNoteIdx = f.checklist.findIndex(c=>c.result==='bad' && !(c.note||'').trim());
+  if(missingNoteIdx >= 0){ toast(`${missingNoteIdx+1}번 항목이 미흡입니다. 보완사항을 입력해 주세요.`); return; }
   const isEdit = !!state.editingRecordId;
   if(isEdit) f.updatedAt = new Date().toISOString();
   const key = "record:" + f.id;
@@ -1064,6 +1111,9 @@ async function submitForm(){
   if(ok){
     toast(isEdit ? "수정 내용이 저장되었습니다." : "점검 보고서가 저장되었습니다.");
     clearDraft(f.branch, f.inspectorName); // 정식 제출됐으니 남아 있던 임시저장 초안은 지운다
+    // 알림은 "새로 접수된" 미흡 건에만 보낸다(수정 저장마다 매번 다시 보내면 관리자가
+    // 같은 건을 두 번 세 번 고칠 때마다 알림이 반복돼 오히려 무시하게 됨).
+    if(!isEdit && (f.checklist||[]).some(c=>c.result==='bad')) sendBadResultNotification(f);
     state.editingRecordId = null;
     await loadRecords();
     if(state.role === 'admin'){ state.view='admin'; render(); }
@@ -1085,6 +1135,7 @@ async function renderAdminInto(root){
         <button class="btn" id="btn-daily-report">📋 일일 집계 보고</button>
         <button class="btn" id="btn-vendor-manage">🏢 협력사·공사팀 관리</button>
         ${isMaster ? `<button class="btn" id="btn-branch-admin-manage">🔑 지사 관리자 비밀번호</button>` : ''}
+        ${isMaster ? `<button class="btn" id="btn-notify-manage">🔔 미흡 알림 설정</button>` : ''}
         <button class="btn" id="btn-print-all">🖨 전체 인쇄/PDF</button>
         <button class="btn" id="btn-zip">🗜 전체 내보내기</button>
         <button class="btn" id="btn-export">⬇ CSV 내보내기</button>
@@ -1107,6 +1158,10 @@ async function renderAdminInto(root){
       <div id="branch-rank"></div>
     </div>
     <div class="panel">
+      <h3>협력사·공사팀별 미흡 이력</h3>
+      <div id="vendor-rank"></div>
+    </div>
+    <div class="panel">
       <h3>제출 내역</h3>
       <div class="filters">
         <input type="text" id="f-q" placeholder="상호·현장주소·작업자 검색">
@@ -1119,6 +1174,7 @@ async function renderAdminInto(root){
       <div class="filters" style="margin-top:-4px;">
         <button type="button" class="chip ${state.adminFilter.badOnly?'active':''}" id="chip-bad-only">⚠ 미흡만 보기</button>
         <button type="button" class="chip ${state.adminFilter.missingPhoto?'active':''}" id="chip-missing-photo">📷 사진 누락만 보기</button>
+        <button type="button" class="chip ${state.adminFilter.actionPending?'active':''}" id="chip-action-pending">🛠 조치 미완료만 보기</button>
       </div>
       <div class="hint" style="margin:-2px 0 10px;">전체 인쇄·ZIP·CSV·사진포함 엑셀은 위 검색/필터·칩 조건이 적용된 건에만 적용됩니다.</div>
       <div class="actionbar no-print" style="padding:0 0 10px;border:none;">
@@ -1135,6 +1191,7 @@ async function renderAdminInto(root){
   document.getElementById('btn-daily-report').onclick = openDailyReportModal;
   document.getElementById('btn-vendor-manage').onclick = openVendorManagerModal;
   if(isMaster) document.getElementById('btn-branch-admin-manage').onclick = openBranchAdminManagerModal;
+  if(isMaster) document.getElementById('btn-notify-manage').onclick = openNotifyManagerModal;
   document.getElementById('btn-export').onclick = exportCSV;
   document.getElementById('btn-export-photo-xlsx').onclick = ()=>{
     const input = document.getElementById('photo-xlsx-size');
@@ -1187,12 +1244,17 @@ async function renderAdminInto(root){
     e.currentTarget.classList.toggle('active', state.adminFilter.missingPhoto);
     renderAdminList();
   };
+  document.getElementById('chip-action-pending').onclick = (e)=>{
+    state.adminFilter.actionPending = !state.adminFilter.actionPending;
+    e.currentTarget.classList.toggle('active', state.adminFilter.actionPending);
+    renderAdminList();
+  };
   renderStats();
   renderAdminList();
 }
 
 function getFilteredRecords(){
-  const {q, branch, from, to, badOnly, missingPhoto} = state.adminFilter;
+  const {q, branch, from, to, badOnly, missingPhoto, actionPending} = state.adminFilter;
   return scopedRecords().filter(r=>{
     if(branch && r.branch !== branch) return false;
     if(from && r.inspectDate < from) return false;
@@ -1201,8 +1263,10 @@ function getFilteredRecords(){
       const hay = `${r.companyName} ${r.siteAddress} ${r.workerName} ${r.teamName}`.toLowerCase();
       if(!hay.includes(q)) return false;
     }
-    if(badOnly && !(r.checklist||[]).some(x=>x.result==='bad')) return false;
+    const hasBad = (r.checklist||[]).some(x=>x.result==='bad');
+    if(badOnly && !hasBad) return false;
     if(missingPhoto && !(r.checklist||[]).some(x=>!x.photo)) return false;
+    if(actionPending && !(hasBad && r.actionStatus!=='done')) return false;
     return true;
   });
 }
@@ -1727,6 +1791,68 @@ function openBranchAdminManagerModal(){
   })();
 }
 
+/* 미흡 발생 자동 알림(웹훅) 설정 — 본부(전체) 관리자만 연다. "테스트 전송"은 저장
+   전에 지금 입력창에 있는 URL로 바로 fetch를 날려서, 저장하기 전에 웹훅이 실제로
+   살아있는지 확인할 수 있게 한다(저장된 값이 아니라 화면의 입력값을 그대로 씀). */
+function openNotifyManagerModal(){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'export-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="export-modal" style="max-width:480px;">
+      <h3>미흡 발생 자동 알림</h3>
+      <div class="hint">Slack·Discord 등의 "수신 웹훅(Incoming Webhook)" URL을 등록해두면, 점검자가 미흡 항목이 있는 보고서를 새로 제출할 때마다 그 채널로 자동 알림이 갑니다(같은 건을 다시 수정 저장할 때는 중복으로 안 보냄).</div>
+      <div style="margin:12px 0;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;cursor:pointer;">
+          <input type="checkbox" id="notify-enabled-cb"> 알림 사용
+        </label>
+      </div>
+      <div class="field" style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--ink-soft);">웹훅 URL</label>
+        <input type="text" id="notify-url" placeholder="https://hooks.slack.com/services/..." style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;">
+      </div>
+      <div id="notify-test-result" class="hint" style="display:none;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="cancel" id="notify-test" style="width:auto;padding:8px 14px;">📨 테스트 전송</button>
+        <button type="button" class="cancel" id="notify-save" style="width:auto;padding:8px 14px;background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);">저장</button>
+        <button type="button" class="cancel" data-cancel style="width:auto;padding:8px 14px;">닫기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  const close = ()=>{ if(backdrop.parentNode) document.body.removeChild(backdrop); };
+  backdrop.querySelector('[data-cancel]').onclick = close;
+  backdrop.addEventListener('click', (e)=>{ if(e.target === backdrop) close(); });
+
+  (async ()=>{
+    const cfg = await loadNotifyConfig();
+    backdrop.querySelector('#notify-enabled-cb').checked = !!cfg.enabled;
+    backdrop.querySelector('#notify-url').value = cfg.url || '';
+
+    backdrop.querySelector('#notify-test').onclick = async ()=>{
+      const url = backdrop.querySelector('#notify-url').value.trim();
+      const resultEl = backdrop.querySelector('#notify-test-result');
+      resultEl.style.display = 'block';
+      if(!url){ resultEl.textContent = "URL을 먼저 입력해 주세요."; return; }
+      resultEl.textContent = "전송 중...";
+      try{
+        await sendWebhook(url, "✅ AS·공사현장 안전점검 시스템 — 알림 테스트 메시지입니다.");
+        resultEl.textContent = "전송을 시도했습니다. 대상 채널에서 메시지 도착을 확인해 주세요.";
+      }catch(e){
+        resultEl.textContent = "전송 요청 중 오류가 발생했습니다: " + (e && e.message ? e.message : e);
+      }
+    };
+    backdrop.querySelector('#notify-save').onclick = async ()=>{
+      const cfg2 = {
+        enabled: backdrop.querySelector('#notify-enabled-cb').checked,
+        url: backdrop.querySelector('#notify-url').value.trim(),
+      };
+      if(cfg2.enabled && !cfg2.url){ toast("URL을 입력하거나 알림 사용을 꺼 주세요."); return; }
+      await saveNotifyConfig(cfg2);
+      toast("알림 설정이 저장되었습니다.");
+      close();
+    };
+  })();
+}
+
 async function exportZip(rows, filename){
   if(typeof JSZip === 'undefined'){ toast("압축 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."); return; }
   if(rows.length===0){ toast("압축할 내역이 없습니다."); return; }
@@ -1760,6 +1886,7 @@ function renderStats(){
   `;
   renderTrendChart();
   renderBranchRank();
+  renderVendorRank();
 }
 
 /* 월별 추이 — 제출일자(inspectDate) 기준 최근 6개월(이번 달 포함)을 항상 표시한다.
@@ -1821,6 +1948,30 @@ function renderBranchRank(){
   </table>`;
 }
 
+/* 협력사·공사팀별 미흡 이력 — 반복적으로 미흡이 나오는 협력사/팀을 데이터로
+   추적하기 위함. 협력사만으로 묶으면 같은 협력사 안의 여러 팀 실적이 뭉개지므로
+   "협력사 / 팀명" 조합을 한 행으로 잡는다(팀명이 없으면 "(팀 미지정)"으로 묶음).
+   지사별 순위와 마찬가지로 제출이 아예 없는 조합은 표에서 제외. */
+function renderVendorRank(){
+  const el = document.getElementById('vendor-rank');
+  if(!el) return;
+  const byVendor = {};
+  scopedRecords().forEach(r=>{
+    if(!r.vendor) return;
+    const key = `${r.vendor}||${r.teamName || '(팀 미지정)'}`;
+    byVendor[key] = byVendor[key] || {vendor:r.vendor, team:r.teamName||'(팀 미지정)', total:0, bad:0};
+    byVendor[key].total++;
+    if((r.checklist||[]).some(x=>x.result==='bad')) byVendor[key].bad++;
+  });
+  const rows = Object.values(byVendor).map(d=>({...d, pct: d.total ? Math.round(d.bad/d.total*100) : 0}))
+    .sort((a,b)=> b.bad-a.bad || b.pct-a.pct);
+  if(rows.length===0){ el.innerHTML = `<div class="empty">제출 내역이 없습니다.</div>`; return; }
+  el.innerHTML = `<table class="rank-table">
+    <tr><th>협력사</th><th>공사팀</th><th style="text-align:right;">제출 건수</th><th style="text-align:right;">미흡 건수</th><th style="text-align:right;">미흡률</th></tr>
+    ${rows.map(r=>`<tr><td>${esc(r.vendor)}</td><td>${esc(r.team)}</td><td class="num">${r.total}</td><td class="num">${r.bad}</td><td class="pct">${r.pct}%</td></tr>`).join("")}
+  </table>`;
+}
+
 function renderAdminList(){
   const wrap = document.getElementById('list-wrap');
   const rows = getFilteredRecords();
@@ -1831,15 +1982,20 @@ function renderAdminList(){
       <tr><th style="width:26px;"><input type="checkbox" id="select-all-rows"></th><th>점검일자</th><th>지사</th><th>상호</th><th>현장주소</th><th>상태</th><th>제출시각</th><th></th></tr>
       ${rows.map(r=>{
         const hasBad = (r.checklist||[]).some(x=>x.result==='bad');
+        const done = hasBad && r.actionStatus==='done';
+        const statusBadge = !hasBad ? `<span class="badge ok">양호</span>`
+          : done ? `<span class="badge done">조치완료</span>`
+          : `<span class="badge bad">미흡 확인 필요</span>`;
         return `<tr>
           <td><input type="checkbox" class="row-check" data-id="${r.id}" ${state.selectedIds.has(r.id)?'checked':''}></td>
           <td class="mono">${esc(r.inspectDate)}</td>
           <td>${esc(r.branch||'-')}</td>
           <td>${esc(r.companyName||'-')}</td>
           <td>${esc(r.siteAddress||'-')}</td>
-          <td><span class="badge ${hasBad?'bad':'ok'}">${hasBad?'미흡 확인 필요':'양호'}</span></td>
+          <td>${statusBadge}</td>
           <td class="mono" style="font-size:11.5px;">${new Date(r.createdAt).toLocaleString('ko-KR')}</td>
           <td><div class="rowbtns">
+            ${hasBad ? `<button class="btn ${done?'ghost':'warn'}" data-action="${r.id}">${done?'조치 내역':'조치 처리'}</button>` : ''}
             <button class="btn ghost" data-view="${r.id}">보기</button>
             <button class="btn" data-edit="${r.id}">수정</button>
             <button class="btn danger" data-del="${r.id}">삭제</button>
@@ -1892,6 +2048,72 @@ function renderAdminList(){
       toast("삭제되었습니다.");
     });
   });
+  wrap.querySelectorAll('[data-action]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rec = state.records.find(r=>r.id===btn.getAttribute('data-action'));
+      if(rec) openActionStatusModal(rec);
+    });
+  });
+}
+
+/* 미흡 항목 시정조치(후속조치) 상태 — 체크리스트 개별 항목이 아니라 보고서 1건 단위로
+   관리한다(항목별로 쪼개면 UI가 크게 복잡해지는데, 실제로는 "이 건에서 지적된 미흡
+   사항이 전부 해결됐는지" 하나만 추적해도 충분하다는 판단). record 자체의
+   actionStatus/actionDate/actionBy/actionNote 필드에 저장하고, 다른 필드 수정과
+   똑같이 Firestore의 그 record 문서를 그대로 덮어쓴다. */
+async function updateActionStatus(id, patch){
+  const rec = state.records.find(r=>r.id===id);
+  if(!rec) return false;
+  Object.assign(rec, patch);
+  const ok = await sSet("record:"+id, JSON.stringify(rec));
+  return !!ok;
+}
+function openActionStatusModal(rec){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'export-modal-backdrop';
+  const done = rec.actionStatus === 'done';
+  backdrop.innerHTML = `
+    <div class="export-modal" style="max-width:480px;">
+      <h3>시정조치 처리</h3>
+      <div class="hint">${esc(rec.inspectDate)} · ${esc(rec.branch||'-')} · ${esc(rec.companyName||'-')}<br>${esc(rec.siteAddress||'-')}</div>
+      <div style="margin:12px 0;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;cursor:pointer;">
+          <input type="checkbox" id="action-done-cb" ${done?'checked':''}> 조치완료로 표시
+        </label>
+      </div>
+      <div class="field" style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--ink-soft);">조치자</label>
+        <input type="text" id="action-by" value="${esc(rec.actionBy||'')}" placeholder="조치한 사람 이름" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;">
+      </div>
+      <div class="field" style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--ink-soft);">조치일자</label>
+        <input type="date" id="action-date" value="${esc(rec.actionDate||'')}" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;">
+      </div>
+      <div class="field" style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--ink-soft);">조치내용</label>
+        <textarea id="action-note" rows="3" placeholder="어떻게 조치했는지 기록" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;">${esc(rec.actionNote||'')}</textarea>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="cancel" id="action-save" style="width:auto;padding:8px 14px;background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);">저장</button>
+        <button type="button" class="cancel" data-cancel style="width:auto;padding:8px 14px;">닫기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  const close = ()=>{ if(backdrop.parentNode) document.body.removeChild(backdrop); };
+  backdrop.querySelector('[data-cancel]').onclick = close;
+  backdrop.addEventListener('click', (e)=>{ if(e.target === backdrop) close(); });
+  backdrop.querySelector('#action-save').onclick = async ()=>{
+    const isDone = backdrop.querySelector('#action-done-cb').checked;
+    const patch = {
+      actionStatus: isDone ? 'done' : '',
+      actionBy: backdrop.querySelector('#action-by').value.trim(),
+      actionDate: backdrop.querySelector('#action-date').value,
+      actionNote: backdrop.querySelector('#action-note').value.trim(),
+    };
+    const ok = await updateActionStatus(rec.id, patch);
+    if(ok){ toast("시정조치 내역이 저장되었습니다."); renderAdminList(); renderStats(); close(); }
+    else{ toast("저장에 실패했습니다. 인터넷 연결을 확인해 주세요."); }
+  };
 }
 
 function updateSelectedCount(){
