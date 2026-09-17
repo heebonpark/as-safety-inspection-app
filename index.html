@@ -11,6 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 <style>
   :root{
     --ink:#1b2a2e;
@@ -147,14 +148,33 @@
   textarea.wide:focus{outline:none;}
 
   .meta-footer{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;}
+  /* 화면(편집 중)에서는 안 보이다가 실제 인쇄(@media print)에서만 나타난다 — 점검자가
+     방금 작성한 폼(읽기전용 아님)을 바로 "인쇄/PDF"로 찍을 때도 QR이 들어가야 하므로,
+     dis(읽기전용) 여부와 무관하게 항상 마크업 자체는 만들어두고 표시만 인쇄에서 켠다. */
+  .qr-block{display:none;justify-content:flex-end;align-items:center;gap:6px;margin-top:4px;}
+  .qr-block img{width:54px;height:54px;}
+  .qr-block .qr-label{font-size:9.5px;color:var(--ink-soft);text-align:right;line-height:1.3;}
 
   .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
   .stat{flex:1;min-width:140px;background:var(--surface);border:1px solid var(--line-soft);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);}
   .stat .n{font-size:24px;font-weight:900;color:var(--brand-deep);font-family:'IBM Plex Mono',monospace;}
   .stat .l{font-size:11.5px;color:var(--ink-soft);font-weight:700;margin-top:2px;}
+  .trend-row{display:grid;grid-template-columns:64px 1fr 90px;align-items:center;gap:10px;padding:5px 0;font-size:12px;}
+  .trend-row .lb{color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;}
+  .trend-track{position:relative;height:16px;background:var(--paper);border-radius:5px;overflow:hidden;}
+  .trend-fill-total{position:absolute;top:0;left:0;bottom:0;background:var(--brand);border-radius:5px;}
+  .trend-fill-bad{position:absolute;top:0;left:0;bottom:0;background:var(--red);border-radius:5px;}
+  .trend-row .vv{text-align:right;font-family:'IBM Plex Mono',monospace;color:var(--ink);}
+  .rank-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .rank-table th{text-align:left;padding:6px 8px;color:var(--ink-soft);font-size:11px;border-bottom:1px solid var(--line);}
+  .rank-table td{padding:6px 8px;border-bottom:1px solid var(--line-soft);}
+  .rank-table td.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .rank-table td.pct{text-align:right;font-family:'IBM Plex Mono',monospace;color:var(--red);font-weight:700;}
   .panel{background:var(--surface);border:1px solid var(--line-soft);border-radius:12px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:18px;}
   .panel h3{margin:0 0 12px;font-size:14px;font-weight:900;color:var(--brand-deep);display:flex;align-items:center;gap:8px;}
   .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+  .chip{padding:6px 13px;border-radius:20px;border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);font-size:12px;font-weight:700;cursor:pointer;}
+  .chip.active{background:var(--brand-deep);border-color:var(--brand-deep);color:#fff;}
   .filters input,.filters select{padding:8px 10px;border:1.5px solid var(--line);border-radius:7px;font-size:12.8px;}
   .filters input[type=text]{flex:1;min-width:160px;}
   table.list{width:100%;border-collapse:collapse;}
@@ -245,10 +265,13 @@
     .photo-caption{font-size:9px !important;padding:2px !important;}
     .photo-cell{padding:5px;gap:3px;}
     .photo-cell .plabel{font-size:9px;}
-    .photo-box{aspect-ratio:auto !important;height:61.5mm !important;}
+    .photo-box{aspect-ratio:auto !important;height:52.7mm !important;}
     .remarks-box{padding:5px 8px;margin-bottom:6px;}
     textarea.wide{min-height:16mm;font-size:9.5px;padding:0;}
     .meta-footer{font-size:8px;margin-top:2px;}
+    .qr-block{display:flex;margin-top:2px;}
+    .qr-block img{width:9mm;height:9mm;}
+    .qr-block .qr-label{font-size:7px;}
   }
 
   @media (max-width:720px){
@@ -371,11 +394,34 @@ function toast(msg){
 // 사진은 Firestore 문서 1개(1MB 제한) 안에 텍스트와 함께 저장하므로, 올리자마자
 // 캔버스로 축소·재압축해서 용량을 크게 줄인다(별도 파일 저장소를 새로 구축할
 // 필요 없이 지금 있는 Firestore 하나로 충분하게).
+/* GPS 위치를 최대 timeoutMs만 기다려보고, 권한 거부·타임아웃·위치서비스 꺼짐 등
+   어떤 이유로든 실패하면 조용히 null을 준다(사진 자체는 GPS 없이도 계속 처리돼야
+   하므로 여기서 절대 reject하지 않음). */
+function getGeoPositionSafe(timeoutMs){
+  return new Promise(resolve=>{
+    if(!navigator.geolocation){ resolve(null); return; }
+    let done = false;
+    const finish = (pos)=>{ if(done) return; done = true; resolve(pos); };
+    const timer = setTimeout(()=>finish(null), timeoutMs);
+    navigator.geolocation.getCurrentPosition(
+      pos=>{ clearTimeout(timer); finish(pos); },
+      ()=>{ clearTimeout(timer); finish(null); },
+      { timeout: timeoutMs, maximumAge: 60000 }
+    );
+  });
+}
+function watermarkText(pos){
+  const now = new Date();
+  const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} `
+    + `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  if(pos && pos.coords) return `${ts}  ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
+  return ts;
+}
 function compressImageFile(file){
   return new Promise((resolve, reject)=>{
     const img = new Image();
     const url = URL.createObjectURL(file);
-    img.onload = ()=>{
+    img.onload = async ()=>{
       URL.revokeObjectURL(url);
       const maxDim = 720;
       let {width, height} = img;
@@ -383,7 +429,21 @@ function compressImageFile(file){
       else if(height > maxDim){ width = Math.round(width*maxDim/height); height = maxDim; }
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      // 현장 증빙 신뢰도를 위해 촬영시각(+가능하면 GPS 좌표)을 사진 하단에 워터마크로
+      // 새겨 넣는다. 위치 권한이 없거나 실내/PC 업로드라 GPS가 안 잡히면 시각만 찍는다.
+      try{
+        const pos = await getGeoPositionSafe(4000);
+        const text = watermarkText(pos);
+        const barH = Math.max(16, Math.round(height*0.07));
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(0, height-barH, width, barH);
+        ctx.fillStyle = '#fff';
+        ctx.font = `${Math.round(barH*0.55)}px sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 6, height-barH/2);
+      }catch(e){ /* 워터마크가 실패해도 사진 처리 자체는 계속 진행 */ }
       let quality = 0.62;
       let dataUrl = canvas.toDataURL('image/jpeg', quality);
       while(dataUrl.length > 260000 && quality > 0.25){
@@ -401,11 +461,12 @@ function compressImageFile(file){
 const state = {
   view: "login",           // login | form | admin
   role: null,              // inspector | admin
+  adminScope: null,        // null이면 전체(본부) 관리자, 지사명이면 그 지사로 한정된 관리자
   inspector: null,         // {branch, name}
   editingRecordId: null,
   currentForm: null,
   records: [],
-  adminFilter: { q:"", branch:"", from:"", to:"" },
+  adminFilter: { q:"", branch:"", from:"", to:"", badOnly:false, missingPhoto:false },
   selectedIds: new Set(),
   vendors: [], // [{name, teams:[...]}] — 협력사/공사팀, 관리자가 등록/수정
 };
@@ -434,6 +495,35 @@ function blankForm(prefill){
   };
 }
 
+/* ---------------- 작성 중 임시저장(초안) ----------------
+   현장(모바일)에서 작성 중 화면 전환·네트워크 끊김으로 입력 내용이 통째로
+   날아가는 걸 막기 위해, "새 보고서 작성" 중일 때만(기존 보고서 수정 중에는
+   원본과 섞이지 않도록 저장 안 함) 지사+점검자 이름별로 이 브라우저에 초안을
+   남긴다. 제출에 성공하면 그 초안은 지운다. 사진(base64)까지 포함해 매 입력마다
+   그대로 쓰면 무거우므로 800ms 디바운스로 묶어서 쓴다. */
+function draftKey(branch, name){ return `asDraft:${branch}||${name}`; }
+let _draftSaveTimer = null;
+function scheduleDraftSave(f){
+  if(state.editingRecordId) return; // 기존 보고서 수정 중에는 초안을 남기지 않음
+  clearTimeout(_draftSaveTimer);
+  _draftSaveTimer = setTimeout(()=>{
+    try{ localStorage.setItem(draftKey(f.branch, f.inspectorName), JSON.stringify(f)); }catch(e){}
+  }, 800);
+}
+function loadDraft(branch, name){
+  try{ const raw = localStorage.getItem(draftKey(branch, name)); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function clearDraft(branch, name){
+  try{ localStorage.removeItem(draftKey(branch, name)); }catch(e){}
+}
+// 빈 양식과 사실상 같으면(아무 입력도 없으면) "복원할지 물어볼 가치가 있는 초안"으로 치지 않는다.
+function draftHasContent(f){
+  if(!f) return false;
+  if(f.companyName || f.contractNo || f.teamName || f.workerName || f.siteAddress || f.remarks) return true;
+  return (f.checklist||[]).some(c=>c.result || c.note || c.photo);
+}
+
 /* ---------------- boot ---------------- */
 async function loadRecords(){
   const items = await sListValues("record:");
@@ -453,6 +543,25 @@ async function saveVendors(){
 function findVendorTeams(vendorName){
   const v = state.vendors.find(x=>x.name===vendorName);
   return v ? v.teams : [];
+}
+
+/* 지사별 관리자 비밀번호 — {지사명: 비밀번호} 맵. ADMIN_PASSWORD(본부/전체 관리자)는
+   그대로 두고, 이 맵에 등록된 지사만 그 지사 전용 비밀번호로 로그인할 수 있다.
+   등록 안 된 지사는 지사 관리자 로그인 자체가 없고(본부 관리자만 그 지사 데이터를
+   봄), 비밀번호를 빈칸으로 저장하면 그 지사 로그인을 다시 끈 것과 같다. */
+async function loadBranchAdminPw(){
+  const raw = await sGet("config:branchAdminPw");
+  if(raw){ try{ const parsed = JSON.parse(raw); if(parsed && typeof parsed==='object') return parsed; }catch(e){} }
+  return {};
+}
+async function saveBranchAdminPw(map){
+  await sSet("config:branchAdminPw", JSON.stringify(map));
+}
+// 관리자 로그인 시 매번 최신 상태를 Firestore에서 새로 읽어와야, 다른 관리자가
+// 방금 바꾼 지사 비밀번호가 바로 반영된다(state에 캐시해두고 쓰면 오래된 값으로
+// 로그인 판정을 할 위험이 있음).
+function scopedRecords(){
+  return state.adminScope ? state.records.filter(r=>r.branch===state.adminScope) : state.records;
 }
 
 function render(){
@@ -536,7 +645,12 @@ function bindLogin(){
     state.role = "inspector";
     state.inspector = {branch, name};
     state.editingRecordId = null;
-    state.currentForm = blankForm({branch, name});
+    const draft = loadDraft(branch, name);
+    if(draftHasContent(draft) && confirm("작성 중 저장이 안 된 보고서 초안이 있습니다. 이어서 작성하시겠습니까?\n(취소를 누르면 새 보고서로 시작하고, 기존 초안은 그대로 남습니다)")){
+      state.currentForm = draft;
+    }else{
+      state.currentForm = blankForm({branch, name});
+    }
     state.view = "form";
     render();
   };
@@ -545,6 +659,19 @@ function bindLogin(){
     const pw = document.getElementById('in-admin-pw').value;
     if(pw === ADMIN_PASSWORD){
       state.role = "admin";
+      state.adminScope = null; // 본부(전체) 관리자
+      await loadRecords();
+      state.view = "admin";
+      render();
+      return;
+    }
+    // 본부 비밀번호가 아니면, 등록된 지사별 관리자 비밀번호와도 비교한다. 매번
+    // Firestore에서 새로 읽어와야 다른 관리자가 방금 바꾼 비밀번호가 바로 반영된다.
+    const branchPw = await loadBranchAdminPw();
+    const matchedBranch = Object.keys(branchPw).find(b=> branchPw[b] && branchPw[b] === pw);
+    if(matchedBranch){
+      state.role = "admin";
+      state.adminScope = matchedBranch;
       await loadRecords();
       state.view = "admin";
       render();
@@ -561,7 +688,9 @@ function bindLogin(){
    SHELL
    ============================================================ */
 function shellHTML(){
-  const who = state.role === 'admin' ? `관리자 모드` : `${esc(state.inspector.branch)} / ${esc(state.inspector.name)}`;
+  const who = state.role === 'admin'
+    ? (state.adminScope ? `${esc(state.adminScope)} 지사 관리자` : `전체(본부) 관리자`)
+    : `${esc(state.inspector.branch)} / ${esc(state.inspector.name)}`;
   return `
   <div class="topbar no-print">
     <div class="brand"><span class="dot"></span>AS·공사현장 안전점검 시스템<span class="sub">KT-TELECOP / 강북·강원</span></div>
@@ -573,7 +702,7 @@ function shellHTML(){
 
 function bindShell(){
   document.getElementById('btn-logout').onclick = ()=>{
-    state.role = null; state.inspector = null; state.currentForm = null; state.view = "login";
+    state.role = null; state.adminScope = null; state.inspector = null; state.currentForm = null; state.view = "login";
     render();
   };
 }
@@ -665,6 +794,22 @@ function renderMineListInto(root){
   });
 }
 
+/* 인쇄물 위변조 확인용 QR — 스캔하면 이 보고서의 디지털 원본을 그대로 보여주는
+   페이지(?verify=<id>)로 연결된다. 로그인 없이 볼 수 있는 별도의 읽기 전용 경로라
+   실제 Firestore 원본과 대조가 가능해진다(자세한 위험/완화 설명은 renderVerifyView
+   주석 참고). QRious는 생성자 호출 즉시 동기적으로 캔버스에 그리므로, 여기서도
+   sheetOuterHTML()처럼 동기 함수인 채로 바로 dataURL을 만들어 문자열에 박아 넣을 수
+   있다(비동기로 만들면 이 함수를 호출하는 모든 곳—인쇄/ZIP/정적 문서 내보내기 등—을
+   전부 고쳐야 해서 훨씬 번거로움). */
+const QR_VERIFY_BASE_URL = 'https://heebonpark.github.io/as-safety-inspection-app/';
+function qrVerifyDataUrl(recordId, sizePx){
+  if(typeof QRious === 'undefined') return '';
+  try{
+    const canvas = document.createElement('canvas');
+    new QRious({ element: canvas, value: `${QR_VERIFY_BASE_URL}?verify=${recordId}`, size: sizePx, level: 'M' });
+    return canvas.toDataURL('image/png');
+  }catch(e){ return ''; }
+}
 function sheetOuterHTML(f, dis){
   return `
     <h2 class="formtitle">AS 및 공사현장 안전점검 일일 보고</h2>
@@ -739,6 +884,12 @@ function sheetOuterHTML(f, dis){
       <span>${f.updatedAt ? '수정' : '작성'}일시 ${new Date(f.updatedAt||f.createdAt).toLocaleString('ko-KR')}</span>
     </div>
     ` : ''}
+    ${(()=>{ const qr = qrVerifyDataUrl(f.id, 120); return qr ? `
+    <div class="qr-block">
+      <div class="qr-label">스캔하면 원본 기록<br>확인 가능</div>
+      <img src="${qr}" alt="검증 QR">
+    </div>
+    ` : ''; })()}
   `;
 }
 
@@ -845,11 +996,11 @@ function openSignatureModal(existingSig, onSave){
 
 function bindFormInputs(el, f, readOnly){
   el.querySelectorAll('[data-field]').forEach(inp=>{
-    inp.addEventListener('input', ()=>{ f[inp.getAttribute('data-field')] = inp.value; });
-    inp.addEventListener('change', ()=>{ f[inp.getAttribute('data-field')] = inp.value; });
+    inp.addEventListener('input', ()=>{ f[inp.getAttribute('data-field')] = inp.value; scheduleDraftSave(f); });
+    inp.addEventListener('change', ()=>{ f[inp.getAttribute('data-field')] = inp.value; scheduleDraftSave(f); });
   });
   el.querySelectorAll('[data-radio-field]').forEach(inp=>{
-    inp.addEventListener('change', ()=>{ f[inp.getAttribute('data-radio-field')] = inp.value; });
+    inp.addEventListener('change', ()=>{ f[inp.getAttribute('data-radio-field')] = inp.value; scheduleDraftSave(f); });
   });
   if(readOnly) return;
   const branchSel = el.querySelector('[data-field="branch"]');
@@ -869,10 +1020,10 @@ function bindFormInputs(el, f, readOnly){
     });
   }
   el.querySelectorAll('[data-ck-result]').forEach(inp=>{
-    inp.addEventListener('change', ()=>{ f.checklist[Number(inp.getAttribute('data-ck-result'))].result = inp.value; });
+    inp.addEventListener('change', ()=>{ f.checklist[Number(inp.getAttribute('data-ck-result'))].result = inp.value; scheduleDraftSave(f); });
   });
   el.querySelectorAll('[data-ck-note]').forEach(inp=>{
-    inp.addEventListener('input', ()=>{ f.checklist[Number(inp.getAttribute('data-ck-note'))].note = inp.value; });
+    inp.addEventListener('input', ()=>{ f.checklist[Number(inp.getAttribute('data-ck-note'))].note = inp.value; scheduleDraftSave(f); });
   });
   el.querySelectorAll('[data-photo-input]').forEach(inp=>{
     inp.addEventListener('change', async ()=>{
@@ -883,6 +1034,7 @@ function bindFormInputs(el, f, readOnly){
         const dataUrl = await compressImageFile(file);
         f.checklist[idx].photo = dataUrl;
         renderSheet(el, f, readOnly);
+        scheduleDraftSave(f);
       }catch(e){ toast("사진을 처리하지 못했습니다. 다시 시도해 주세요."); }
     });
   });
@@ -891,6 +1043,7 @@ function bindFormInputs(el, f, readOnly){
       const idx = Number(btn.getAttribute('data-photo-clear'));
       f.checklist[idx].photo = "";
       renderSheet(el, f, readOnly);
+      scheduleDraftSave(f);
     });
   });
 }
@@ -910,6 +1063,7 @@ async function submitForm(){
   const ok = await sSet(key, JSON.stringify(f));
   if(ok){
     toast(isEdit ? "수정 내용이 저장되었습니다." : "점검 보고서가 저장되었습니다.");
+    clearDraft(f.branch, f.inspectorName); // 정식 제출됐으니 남아 있던 임시저장 초안은 지운다
     state.editingRecordId = null;
     await loadRecords();
     if(state.role === 'admin'){ state.view='admin'; render(); }
@@ -923,12 +1077,14 @@ async function submitForm(){
    ADMIN DASHBOARD
    ============================================================ */
 async function renderAdminInto(root){
+  const isMaster = !state.adminScope; // 지사 한정 관리자가 아니라 본부(전체) 관리자인지
   root.innerHTML = `
     <div class="actionbar no-print">
-      <div class="title">관리자 대시보드 <span class="mono">등록된 점검 보고서 전체 관리</span></div>
+      <div class="title">관리자 대시보드 <span class="mono">${isMaster ? '등록된 점검 보고서 전체 관리' : `${esc(state.adminScope)} 지사 점검 보고서 관리`}</span></div>
       <div class="btns">
         <button class="btn" id="btn-daily-report">📋 일일 집계 보고</button>
         <button class="btn" id="btn-vendor-manage">🏢 협력사·공사팀 관리</button>
+        ${isMaster ? `<button class="btn" id="btn-branch-admin-manage">🔑 지사 관리자 비밀번호</button>` : ''}
         <button class="btn" id="btn-print-all">🖨 전체 인쇄/PDF</button>
         <button class="btn" id="btn-zip">🗜 전체 내보내기</button>
         <button class="btn" id="btn-export">⬇ CSV 내보내기</button>
@@ -943,14 +1099,28 @@ async function renderAdminInto(root){
     </div>
     <div class="stats" id="stats"></div>
     <div class="panel">
+      <h3>월별 추이 (최근 6개월)</h3>
+      <div id="trend-chart"></div>
+    </div>
+    <div class="panel">
+      <h3>지사별 미흡 순위</h3>
+      <div id="branch-rank"></div>
+    </div>
+    <div class="panel">
       <h3>제출 내역</h3>
       <div class="filters">
         <input type="text" id="f-q" placeholder="상호·현장주소·작업자 검색">
-        <select id="f-branch"><option value="">전체 지사</option>${BRANCHES.map(b=>`<option value="${b}">${b}</option>`).join("")}</select>
+        <select id="f-branch" ${isMaster ? '' : 'disabled'}>${isMaster
+          ? `<option value="">전체 지사</option>${BRANCHES.map(b=>`<option value="${b}">${b}</option>`).join("")}`
+          : `<option value="${esc(state.adminScope)}" selected>${esc(state.adminScope)}</option>`}</select>
         <input type="date" id="f-from">
         <input type="date" id="f-to">
       </div>
-      <div class="hint" style="margin:-2px 0 10px;">전체 인쇄·ZIP·CSV는 위 검색/필터 조건이 적용된 건에만 적용됩니다.</div>
+      <div class="filters" style="margin-top:-4px;">
+        <button type="button" class="chip ${state.adminFilter.badOnly?'active':''}" id="chip-bad-only">⚠ 미흡만 보기</button>
+        <button type="button" class="chip ${state.adminFilter.missingPhoto?'active':''}" id="chip-missing-photo">📷 사진 누락만 보기</button>
+      </div>
+      <div class="hint" style="margin:-2px 0 10px;">전체 인쇄·ZIP·CSV·사진포함 엑셀은 위 검색/필터·칩 조건이 적용된 건에만 적용됩니다.</div>
       <div class="actionbar no-print" style="padding:0 0 10px;border:none;">
         <div class="title" id="selected-count" style="font-size:12.5px;color:var(--ink-soft);">0건 선택됨</div>
         <div class="btns">
@@ -964,6 +1134,7 @@ async function renderAdminInto(root){
   document.getElementById('btn-refresh').onclick = async ()=>{ await loadRecords(); renderAdminList(); renderStats(); };
   document.getElementById('btn-daily-report').onclick = openDailyReportModal;
   document.getElementById('btn-vendor-manage').onclick = openVendorManagerModal;
+  if(isMaster) document.getElementById('btn-branch-admin-manage').onclick = openBranchAdminManagerModal;
   document.getElementById('btn-export').onclick = exportCSV;
   document.getElementById('btn-export-photo-xlsx').onclick = ()=>{
     const input = document.getElementById('photo-xlsx-size');
@@ -994,6 +1165,7 @@ async function renderAdminInto(root){
   ['f-q','f-branch','f-from','f-to'].forEach(id=>{
     document.getElementById(id).addEventListener('input', ()=>{
       state.adminFilter = {
+        ...state.adminFilter,
         q: document.getElementById('f-q').value.trim().toLowerCase(),
         branch: document.getElementById('f-branch').value,
         from: document.getElementById('f-from').value,
@@ -1002,13 +1174,26 @@ async function renderAdminInto(root){
       renderAdminList();
     });
   });
+  // 전체 대시보드를 다시 그리면 위 검색어/지사/기간 입력칸이 화면에서만 비워져 보이는
+  // 것처럼 보일 수 있어(값 자체는 state.adminFilter에 남아 있지만 input엔 반영 안 함),
+  // 칩은 목록만 다시 그리고 칩 자신의 active 표시만 직접 토글한다.
+  document.getElementById('chip-bad-only').onclick = (e)=>{
+    state.adminFilter.badOnly = !state.adminFilter.badOnly;
+    e.currentTarget.classList.toggle('active', state.adminFilter.badOnly);
+    renderAdminList();
+  };
+  document.getElementById('chip-missing-photo').onclick = (e)=>{
+    state.adminFilter.missingPhoto = !state.adminFilter.missingPhoto;
+    e.currentTarget.classList.toggle('active', state.adminFilter.missingPhoto);
+    renderAdminList();
+  };
   renderStats();
   renderAdminList();
 }
 
 function getFilteredRecords(){
-  const {q, branch, from, to} = state.adminFilter;
-  return state.records.filter(r=>{
+  const {q, branch, from, to, badOnly, missingPhoto} = state.adminFilter;
+  return scopedRecords().filter(r=>{
     if(branch && r.branch !== branch) return false;
     if(from && r.inspectDate < from) return false;
     if(to && r.inspectDate > to) return false;
@@ -1016,6 +1201,8 @@ function getFilteredRecords(){
       const hay = `${r.companyName} ${r.siteAddress} ${r.workerName} ${r.teamName}`.toLowerCase();
       if(!hay.includes(q)) return false;
     }
+    if(badOnly && !(r.checklist||[]).some(x=>x.result==='bad')) return false;
+    if(missingPhoto && !(r.checklist||[]).some(x=>!x.photo)) return false;
     return true;
   });
 }
@@ -1488,6 +1675,58 @@ function openVendorManagerModal(){
   });
 }
 
+/* 지사별 관리자 비밀번호 관리 — 본부(전체) 관리자만 연다(renderAdminInto에서 버튼
+   자체를 isMaster일 때만 그려서 진입 경로를 막음). 비밀번호를 비워두고 저장하면
+   그 지사는 다시 "지사별 로그인 없음" 상태가 된다(본부 관리자만 그 지사를 봄). */
+function openBranchAdminManagerModal(){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'export-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="export-modal" style="max-width:480px;">
+      <h3>지사 관리자 비밀번호</h3>
+      <div class="hint">지사별로 비밀번호를 지정하면, 그 지사 담당자가 "관리자 로그인"에서 그 비밀번호로 로그인했을 때 <b>자기 지사 내역만</b> 보고 관리할 수 있습니다. 비워두면 그 지사는 지사별 로그인이 꺼진 상태이고(본부 관리자만 조회), 전체(본부) 관리자 비밀번호는 이 화면과 무관하게 항상 그대로 작동합니다.</div>
+      <div id="branch-admin-pw-list" style="max-height:44vh;overflow:auto;margin:10px 0;">불러오는 중...</div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="cancel" id="branch-admin-pw-save" style="width:auto;padding:8px 14px;background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);">저장</button>
+        <button type="button" class="cancel" data-cancel style="width:auto;padding:8px 14px;">닫기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  const close = ()=>{ if(backdrop.parentNode) document.body.removeChild(backdrop); };
+  backdrop.querySelector('[data-cancel]').onclick = close;
+  backdrop.addEventListener('click', (e)=>{ if(e.target === backdrop) close(); });
+
+  (async ()=>{
+    const map = await loadBranchAdminPw();
+    const listEl = backdrop.querySelector('#branch-admin-pw-list');
+    listEl.innerHTML = BRANCHES.map(b=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+        <div style="width:70px;font-size:13px;font-weight:700;">${esc(b)}</div>
+        <input type="text" data-branch-pw="${esc(b)}" value="${esc(map[b]||'')}" placeholder="비워두면 지사별 로그인 없음" style="flex:1;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;">
+      </div>
+    `).join("");
+    backdrop.querySelector('#branch-admin-pw-save').onclick = async ()=>{
+      const newMap = {};
+      BRANCHES.forEach(b=>{
+        const v = backdrop.querySelector(`[data-branch-pw="${b}"]`).value.trim();
+        if(v) newMap[b] = v;
+      });
+      // 같은 비밀번호를 두 지사에 실수로 똑같이 넣으면 로그인 시 어느 지사인지
+      // 구분이 안 되므로(둘 중 먼저 매칭되는 쪽으로 로그인됨), 저장 전에 걸러서 알려준다.
+      const seen = {};
+      const dupes = [];
+      Object.entries(newMap).forEach(([b,pw])=>{
+        if(seen[pw]){ dupes.push(`${seen[pw]} / ${b}`); } else { seen[pw] = b; }
+      });
+      if(dupes.length){ toast(`같은 비밀번호가 중복됩니다: ${dupes.join(', ')}. 서로 다르게 입력해 주세요.`); return; }
+      if(Object.values(newMap).some(v=>v===ADMIN_PASSWORD)){ toast("본부(전체) 관리자 비밀번호와 같은 값은 지사 비밀번호로 쓸 수 없습니다."); return; }
+      await saveBranchAdminPw(newMap);
+      toast("지사 관리자 비밀번호가 저장되었습니다.");
+      close();
+    };
+  })();
+}
+
 async function exportZip(rows, filename){
   if(typeof JSZip === 'undefined'){ toast("압축 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."); return; }
   if(rows.length===0){ toast("압축할 내역이 없습니다."); return; }
@@ -1507,17 +1746,79 @@ async function exportZip(rows, filename){
 
 function renderStats(){
   const el = document.getElementById('stats');
-  const total = state.records.length;
+  const records = scopedRecords();
+  const total = records.length;
   const today = todayStr();
-  const todayCount = state.records.filter(r=>r.inspectDate===today).length;
-  const badCount = state.records.filter(r=>(r.checklist||[]).some(x=>x.result==='bad')).length;
-  const branchCount = new Set(state.records.map(r=>r.branch).filter(Boolean)).size;
+  const todayCount = records.filter(r=>r.inspectDate===today).length;
+  const badCount = records.filter(r=>(r.checklist||[]).some(x=>x.result==='bad')).length;
+  const branchCount = new Set(records.map(r=>r.branch).filter(Boolean)).size;
   el.innerHTML = `
     <div class="stat"><div class="n">${total}</div><div class="l">전체 제출 건수</div></div>
     <div class="stat"><div class="n">${todayCount}</div><div class="l">오늘 점검일자 건수</div></div>
     <div class="stat"><div class="n">${badCount}</div><div class="l">미흡 항목 포함 건수</div></div>
     <div class="stat"><div class="n">${branchCount}</div><div class="l">참여 지사 수</div></div>
   `;
+  renderTrendChart();
+  renderBranchRank();
+}
+
+/* 월별 추이 — 제출일자(inspectDate) 기준 최근 6개월(이번 달 포함)을 항상 표시한다.
+   그 달에 제출이 0건이어도 막대가 아예 안 보이면 "그 달 데이터가 없다"와 "그 달만
+   빠졌다"를 구분할 수 없으므로, 0건인 달도 빈 막대로 그대로 넣는다. */
+function monthKeysBack(n){
+  const out = [];
+  const now = new Date();
+  for(let i=n-1; i>=0; i--){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  return out;
+}
+function renderTrendChart(){
+  const el = document.getElementById('trend-chart');
+  if(!el) return;
+  const months = monthKeysBack(6);
+  const records = scopedRecords();
+  const rows = months.map(m=>{
+    const inMonth = records.filter(r=>(r.inspectDate||"").slice(0,7)===m);
+    const bad = inMonth.filter(r=>(r.checklist||[]).some(x=>x.result==='bad')).length;
+    return { m, total: inMonth.length, bad };
+  });
+  const max = Math.max(1, ...rows.map(r=>r.total));
+  el.innerHTML = rows.map(r=>{
+    const totalPct = Math.round(r.total/max*100);
+    const badPct = r.total>0 ? Math.round(r.bad/r.total*totalPct) : 0;
+    return `<div class="trend-row">
+      <div class="lb">${r.m}</div>
+      <div class="trend-track">
+        <div class="trend-fill-total" style="width:${totalPct}%;"></div>
+        <div class="trend-fill-bad" style="width:${badPct}%;"></div>
+      </div>
+      <div class="vv">${r.total}건${r.bad?` (미흡 ${r.bad})`:''}</div>
+    </div>`;
+  }).join("");
+}
+
+/* 지사별 미흡 순위 — 미흡 건수가 많은 지사부터, 동률이면 미흡률(%)이 높은 순.
+   해당 지사에서 제출이 아예 없으면(0건) 순위표에서 제외(분모 0으로 나누기 방지 겸,
+   활동이 없는 지사까지 표에 채우면 오히려 실제 위험 지사를 찾기 어려워짐). */
+function renderBranchRank(){
+  const el = document.getElementById('branch-rank');
+  if(!el) return;
+  const byBranch = {};
+  scopedRecords().forEach(r=>{
+    if(!r.branch) return;
+    byBranch[r.branch] = byBranch[r.branch] || {total:0, bad:0};
+    byBranch[r.branch].total++;
+    if((r.checklist||[]).some(x=>x.result==='bad')) byBranch[r.branch].bad++;
+  });
+  const rows = Object.entries(byBranch).map(([branch, d])=>({branch, ...d, pct: d.total ? Math.round(d.bad/d.total*100) : 0}))
+    .sort((a,b)=> b.bad-a.bad || b.pct-a.pct);
+  if(rows.length===0){ el.innerHTML = `<div class="empty">제출 내역이 없습니다.</div>`; return; }
+  el.innerHTML = `<table class="rank-table">
+    <tr><th>지사</th><th style="text-align:right;">제출 건수</th><th style="text-align:right;">미흡 건수</th><th style="text-align:right;">미흡률</th></tr>
+    ${rows.map(r=>`<tr><td>${esc(r.branch)}</td><td class="num">${r.total}</td><td class="num">${r.bad}</td><td class="pct">${r.pct}%</td></tr>`).join("")}
+  </table>`;
 }
 
 function renderAdminList(){
@@ -1598,7 +1899,33 @@ function updateSelectedCount(){
   if(el) el.textContent = `${state.selectedIds.size}건 선택됨`;
 }
 
+/* QR 검증 페이지 — 인쇄물의 QR을 스캔하면 여는, 로그인 없이 보는 읽기 전용 화면.
+   이 앱은 기존에도 관리자 비밀번호(ADMIN_PASSWORD)가 화면 안에 그대로 노출돼 있고
+   sGet()/sListValues()가 별도 인증 없이 Firestore를 읽는 구조라(로그인 자체가
+   "이 화면을 볼 자격"을 표시하는 관례적 장치일 뿐, 서버 쪽 접근 제어는 아님),
+   이 페이지 하나만 별도로 더 열어준다고 해서 새로운 종류의 노출이 생기는 건
+   아니다 — 기존 보안 모델을 그대로 따른 것. */
+async function renderVerifyView(id){
+  document.body.innerHTML = `<main style="max-width:900px;margin:0 auto;padding:20px 16px 60px;">
+    <div class="sheet" id="verify-sheet" style="padding:20px;">불러오는 중...</div>
+  </main>`;
+  const raw = await sGet("record:" + id);
+  const wrap = document.getElementById('verify-sheet');
+  if(!raw){
+    wrap.innerHTML = `<div class="empty" style="padding:60px 20px;text-align:center;">존재하지 않거나 삭제된 보고서입니다.</div>`;
+    return;
+  }
+  let f;
+  try{ f = JSON.parse(raw); }catch(e){ wrap.innerHTML = `<div class="empty" style="padding:60px 20px;text-align:center;">기록을 읽는 중 문제가 발생했습니다.</div>`; return; }
+  wrap.innerHTML = sheetOuterHTML(f, 'disabled');
+}
+
 (async function boot(){
+  // 인쇄물 QR(?verify=<id>)로 들어온 경우엔 로그인 화면 없이 바로 그 보고서만
+  // 읽기 전용으로 보여주고 끝낸다 — 일반 로그인/부트 흐름(state.vendors 로드 등)은
+  // 필요 없음.
+  const verifyId = new URLSearchParams(location.search).get('verify');
+  if(verifyId){ await renderVerifyView(verifyId); return; }
   state.vendors = await loadVendors();
   render();
 })();
