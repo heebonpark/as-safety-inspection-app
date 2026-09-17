@@ -1298,6 +1298,7 @@ async function renderAdminInto(root){
     <div class="actionbar no-print">
       <div class="title">관리자 대시보드 <span class="mono">${isMaster ? '등록된 점검 보고서 전체 관리' : `${esc(state.adminScope)} 지사 점검 보고서 관리`}</span></div>
       <div class="btns">
+        <button class="btn" id="btn-manual">📖 운영 매뉴얼</button>
         <button class="btn" id="btn-daily-report">📋 일일 집계 보고</button>
         <button class="btn" id="btn-vendor-manage">🏢 협력사·공사팀 관리</button>
         ${isMaster ? `<button class="btn" id="btn-branch-admin-manage">🔑 지사 관리자 비밀번호</button>` : ''}
@@ -1354,6 +1355,7 @@ async function renderAdminInto(root){
     </div>
   `;
   document.getElementById('btn-refresh').onclick = async ()=>{ await loadRecords(); renderAdminList(); renderStats(); };
+  document.getElementById('btn-manual').onclick = openManualModal;
   document.getElementById('btn-daily-report').onclick = openDailyReportModal;
   document.getElementById('btn-vendor-manage').onclick = openVendorManagerModal;
   if(isMaster) document.getElementById('btn-branch-admin-manage').onclick = openBranchAdminManagerModal;
@@ -1717,6 +1719,41 @@ function buildDailyReportHtmlTable(rows){
   const headRow = `<tr>${dailyReportHeaders().map(h=>`<th style="${thStyle}">${esc(h)}</th>`).join("")}</tr>`;
   const bodyRows = rows.map(r=>`<tr>${dailyReportRowCells(r).map(c=>`<td style="${tdStyle}">${esc(c)}</td>`).join("")}</tr>`).join("");
   return `<table style="border-collapse:collapse;">${headRow}${bodyRows}</table>`;
+}
+
+function openManualModal(){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'export-modal-backdrop';
+  backdrop.style.zIndex = '9999';
+  backdrop.innerHTML = `
+    <div class="export-modal" style="width:90%;max-width:600px;text-align:left;max-height:85vh;overflow-y:auto;">
+      <h3 style="margin-top:0;margin-bottom:16px;text-align:center;">📖 시스템 운영 매뉴얼</h3>
+      <div style="font-size:13px;line-height:1.6;color:var(--ink);margin-bottom:20px;">
+        
+        <h4 style="color:var(--brand-deep);border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:8px;">📱 1. 점검자(현장) 가이드</h4>
+        <ul style="margin-top:0;padding-left:20px;margin-bottom:20px;">
+          <li style="margin-bottom:6px;"><b>음성 인식 (STT):</b> 보완사항 입력칸 우측 마이크(🎤) 아이콘을 누르고 스마트폰에 대고 말하면 텍스트가 자동으로 입력됩니다.</li>
+          <li style="margin-bottom:6px;"><b>사진 그리기 (주석):</b> 첨부 완료된 사진 썸네일을 한 번 더 터치하면, 사진 위에 빨간펜으로 표시를 그릴 수 있는 화면이 열립니다.</li>
+          <li style="margin-bottom:6px;"><b>오프라인 완벽 대응:</b> 인터넷이 끊긴 지하실 등에서 점검을 제출하면 안전하게 기기에 보관(우측 하단 배지 표시)되며, 외부로 나가 통신이 복구되는 순간 즉시 자동 전송됩니다.</li>
+          <li style="margin-bottom:6px;"><b>자동 임시저장:</b> 작성 중 브라우저가 꺼져도 방금 전까지 작성한 내용이 자동 복구됩니다.</li>
+        </ul>
+
+        <h4 style="color:var(--brand-deep);border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:8px;">💻 2. 관리자(대시보드) 가이드</h4>
+        <ul style="margin-top:0;padding-left:20px;margin-bottom:16px;">
+          <li style="margin-bottom:6px;"><b>필터링(칩) 버튼:</b> 상단 칩 버튼을 활용해 '미흡 건', '사진 누락 건', '조치 미완료 건' 등을 즉시 추려볼 수 있습니다.</li>
+          <li style="margin-bottom:6px;"><b>바로 PDF 저장:</b> 항목별 우측 '📄 바로 PDF 저장'을 누르면 깨짐 없이 고화질 인쇄 원본과 동일한 A4 사이즈 PDF가 즉시 다운로드됩니다.</li>
+          <li style="margin-bottom:6px;"><b>사진포함 엑셀:</b> 각 엑셀 셀 안에 알맞은 크기로 현장 사진까지 일괄 자동 삽입되어 추출됩니다.</li>
+          <li style="margin-bottom:6px;"><b>QR 위변조 검증:</b> 인쇄된 문서 하단의 QR코드를 일반 스마트폰으로 스캔하면, 별도의 로그인 절차 없이 해당 보고서의 원본을 모바일 웹으로 즉시 확인할 수 있습니다.</li>
+        </ul>
+
+      </div>
+      <button type="button" class="cancel" data-cancel style="width:100%;font-size:14px;padding:12px;">닫기</button>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  const close = ()=>{ if(backdrop.parentNode) document.body.removeChild(backdrop); };
+  backdrop.querySelector('[data-cancel]').onclick = close;
+  backdrop.addEventListener('click', (e)=>{ if(e.target === backdrop) close(); });
 }
 
 function openDailyReportModal(){
