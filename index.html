@@ -1727,83 +1727,101 @@ function openManualModal(){
   backdrop.style.zIndex = '9999';
   backdrop.style.backdropFilter = 'blur(4px)';
   backdrop.innerHTML = `
-    <div class="export-modal" style="width:92%;max-width:640px;text-align:left;max-height:85vh;overflow-y:auto;padding:0;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.15);border:none;">
+    <style>
+      .manual-details { background: #fff; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border: 1px solid var(--line-soft); overflow: hidden; }
+      .manual-summary { padding: 18px 20px; font-size: 15.5px; font-weight: 700; color: var(--ink); cursor: pointer; display: flex; align-items: center; gap: 8px; user-select: none; list-style: none; outline: none; }
+      .manual-summary::-webkit-details-marker { display: none; }
+      .manual-summary .chev { margin-left: auto; transition: transform 0.2s ease; color: var(--ink-soft); font-size: 14px; }
+      .manual-details[open] .manual-summary .chev { transform: rotate(180deg); }
+      .manual-details[open] .manual-summary { border-bottom: 1px solid var(--line-soft); background: #fafbfc; }
+      .manual-content { padding: 20px; display: flex; flex-direction: column; gap: 16px; animation: slideDown 0.3s ease-out; }
+      .manual-item { display: flex; gap: 14px; align-items: flex-start; }
+      .manual-icon { font-size: 20px; margin-top: 2px; line-height: 1; }
+      .manual-text-title { font-size: 13.5px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+      .manual-text-desc { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; word-break: keep-all; }
+      @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+      @media(max-width:480px){
+        .manual-summary { padding: 16px; font-size: 14.5px; }
+        .manual-content { padding: 16px; gap: 14px; }
+        .manual-item { gap: 12px; }
+        .manual-text-desc { font-size: 12px; }
+      }
+    </style>
+    <div class="export-modal" style="width:94%;max-width:600px;text-align:left;max-height:85vh;overflow-y:auto;padding:0;border-radius:16px;box-shadow:0 12px 35px rgba(0,0,0,0.2);border:none;display:flex;flex-direction:column;">
       
       <!-- Header -->
-      <div style="background:linear-gradient(135deg, var(--brand-deep) 0%, var(--brand) 100%);padding:24px 20px;text-align:center;border-radius:16px 16px 0 0;position:relative;">
-        <h2 style="margin:0;color:#fff;font-size:22px;letter-spacing:-0.5px;font-weight:700;">📖 AS 안전점검 시스템 매뉴얼</h2>
-        <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:12.5px;">스마트한 현장 관리와 효율적인 데이터 리포팅 가이드</p>
-        <button type="button" data-cancel style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.2);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+      <div style="background:linear-gradient(135deg, var(--brand-deep) 0%, var(--brand) 100%);padding:22px 20px;text-align:center;position:relative;flex-shrink:0;">
+        <h2 style="margin:0;color:#fff;font-size:20px;letter-spacing:-0.5px;font-weight:700;">📖 앱 운영 매뉴얼</h2>
+        <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:12px;word-break:keep-all;">스마트한 현장 관리와 효율적인 리포팅 가이드</p>
+        <button type="button" data-cancel style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
       </div>
 
       <!-- Content Body -->
-      <div style="padding:24px 20px;background:#f8faf9;">
+      <div style="padding:20px;background:#f4f6f8;flex-grow:1;">
         
         <!-- Section 1 -->
-        <div style="background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid var(--line-soft);">
-          <h4 style="margin:0 0 16px;font-size:15.5px;color:var(--ink);display:flex;align-items:center;gap:6px;">
-            <span style="background:#e8f0fe;color:#1a73e8;width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;">📱</span> 점검자 (현장) 가이드
-          </h4>
-          
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div style="display:flex;gap:12px;align-items:flex-start;">
-              <div style="font-size:18px;margin-top:2px;">🎤</div>
+        <details class="manual-details" open>
+          <summary class="manual-summary">
+            <span style="background:#e8f0fe;color:#1a73e8;width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;">📱</span> 
+            점검자 (현장) 가이드
+            <span class="chev">▼</span>
+          </summary>
+          <div class="manual-content">
+            <div class="manual-item">
+              <div class="manual-icon">🎤</div>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--ink);">음성 인식 타이핑 (STT)</div>
-                <div style="font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:2px;">보완사항 입력칸 우측 마이크 아이콘을 누르고 스마트폰에 대고 말하면 텍스트가 자동으로 입력됩니다. 현장에서 장갑을 벗지 않고도 쉽게 입력할 수 있습니다.</div>
+                <div class="manual-text-title">음성 인식 자동 타이핑</div>
+                <div class="manual-text-desc">보완사항 입력칸 우측 마이크 아이콘을 누르고 스마트폰에 대고 말하면 텍스트가 자동으로 입력됩니다. 현장에서 장갑을 벗지 않고도 쉽게 입력할 수 있습니다.</div>
               </div>
             </div>
-            
-            <div style="display:flex;gap:12px;align-items:flex-start;">
-              <div style="font-size:18px;margin-top:2px;">🖍</div>
+            <div class="manual-item">
+              <div class="manual-icon">🖍</div>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--ink);">사진 주석 그리기</div>
-                <div style="font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:2px;">사진 첨부 후 사진 썸네일을 터치하면 그리기 창이 열립니다. 빨간펜으로 불량 부위를 명확하게 표시할 수 있습니다.</div>
+                <div class="manual-text-title">사진 주석 (그리기) 기능</div>
+                <div class="manual-text-desc">사진 첨부 후 사진 썸네일을 한 번 더 터치하면 그리기 창이 열립니다. 빨간펜으로 불량 부위를 명확하게 표시해 직관적인 보고서를 작성하세요.</div>
               </div>
             </div>
-
-            <div style="display:flex;gap:12px;align-items:flex-start;">
-              <div style="font-size:18px;margin-top:2px;">📡</div>
+            <div class="manual-item">
+              <div class="manual-icon">📡</div>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--ink);">오프라인 완벽 동기화</div>
-                <div style="font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:2px;">지하실이나 외곽 등 인터넷이 안 터지는 곳에서 점검을 마쳐도 기기에 안전하게 임시 보관되며, 통신망 복구 시 백그라운드에서 자동 전송됩니다.</div>
+                <div class="manual-text-title">오프라인 완벽 동기화</div>
+                <div class="manual-text-desc">지하실 등 인터넷이 안 터지는 곳에서 점검을 마쳐도 기기에 안전하게 임시 보관되며, 지상으로 나가 통신망 복구 시 백그라운드에서 자동 전송됩니다.</div>
               </div>
             </div>
           </div>
-        </div>
+        </details>
 
         <!-- Section 2 -->
-        <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid var(--line-soft);">
-          <h4 style="margin:0 0 16px;font-size:15.5px;color:var(--ink);display:flex;align-items:center;gap:6px;">
-            <span style="background:#fce8e6;color:#d93025;width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;">💻</span> 관리자 (대시보드) 가이드
-          </h4>
-          
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div style="display:flex;gap:12px;align-items:flex-start;">
-              <div style="font-size:18px;margin-top:2px;">🔍</div>
+        <details class="manual-details">
+          <summary class="manual-summary">
+            <span style="background:#fce8e6;color:#d93025;width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;">💻</span> 
+            관리자 (대시보드) 가이드
+            <span class="chev">▼</span>
+          </summary>
+          <div class="manual-content">
+            <div class="manual-item">
+              <div class="manual-icon">🔍</div>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--ink);">스마트 필터링 (칩 버튼)</div>
-                <div style="font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:2px;">상단 칩 버튼으로 '미흡 건', '사진 누락 건', '조치 미완료 건'을 원클릭으로 필터링하여 집중 관리할 수 있습니다.</div>
+                <div class="manual-text-title">스마트 필터링 칩 버튼</div>
+                <div class="manual-text-desc">상단 칩 버튼을 활용해 '미흡 건', '사진 누락 건', '조치 미완료 건'을 원클릭으로 필터링하여 문제 상황을 집중적으로 추려볼 수 있습니다.</div>
               </div>
             </div>
-
-            <div style="display:flex;gap:12px;align-items:flex-start;">
-              <div style="font-size:18px;margin-top:2px;">📄</div>
+            <div class="manual-item">
+              <div class="manual-icon">📄</div>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--ink);">고화질 무손실 PDF 저장</div>
-                <div style="font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:2px;">'바로 PDF 저장' 버튼으로 입력 UI(선, 글자 찌꺼기)가 완벽히 제거된 깔끔한 인쇄 원본 해상도의 보고서를 얻을 수 있습니다.</div>
+                <div class="manual-text-title">고화질 무손실 PDF 저장</div>
+                <div class="manual-text-desc">'바로 PDF 저장' 버튼 클릭 시, 텍스트 입력창 UI 등의 찌꺼기가 완벽히 제거된 깔끔하고 선명한 인쇄 원본용 보고서가 추출됩니다.</div>
               </div>
             </div>
-            
-            <div style="display:flex;gap:12px;align-items:flex-start;">
-              <div style="font-size:18px;margin-top:2px;">📊</div>
+            <div class="manual-item">
+              <div class="manual-icon">📊</div>
               <div>
-                <div style="font-size:13px;font-weight:700;color:var(--ink);">사진 포함 엑셀 자동화</div>
-                <div style="font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:2px;">수십 건의 점검 데이터를 엑셀로 내보낼 때, 셀 크기에 딱 맞춰 현장 사진 이미지까지 일괄 삽입되어 리포팅 시간이 단축됩니다.</div>
+                <div class="manual-text-title">사진 포함 엑셀 자동화</div>
+                <div class="manual-text-desc">수십 건의 점검 데이터를 엑셀로 내보낼 때, 셀 크기에 딱 맞춰 현장 사진 이미지까지 모두 일괄 삽입되어 관리 리포팅 시간이 크게 단축됩니다.</div>
               </div>
             </div>
           </div>
-        </div>
+        </details>
 
       </div>
     </div>
