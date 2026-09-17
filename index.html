@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --ink:#1b2a2e;
@@ -174,6 +176,15 @@
   .sig-modal .row button.primary{background:var(--brand-deep);color:#fff;border-color:var(--brand-deep);}
   .sig-modal .hint{font-size:11px;color:var(--ink-soft);margin-top:8px;}
 
+  .export-modal-backdrop{position:fixed;inset:0;background:rgba(15,30,32,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px;}
+  .export-modal{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;width:100%;max-width:360px;}
+  .export-modal h3{margin:0 0 4px;font-size:15px;color:var(--brand-deep);}
+  .export-modal .hint{font-size:11.5px;color:var(--ink-soft);margin-bottom:12px;}
+  .export-modal .opt{display:block;width:100%;text-align:left;padding:11px 13px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px;}
+  .export-modal .opt .sub{display:block;font-size:11px;font-weight:500;color:var(--ink-soft);margin-top:2px;}
+  .export-modal .opt:hover{border-color:var(--brand);background:#f6faf9;}
+  .export-modal .cancel{display:block;width:100%;text-align:center;padding:9px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:12.5px;color:var(--ink-soft);margin-top:4px;}
+
   .ins-mark{cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:38px;height:29px;}
   .ins-mark.readonly{cursor:default;}
   .ins-mark img.sig-stamp-img{width:38px;height:29px;object-fit:contain;}
@@ -192,7 +203,13 @@
   @media print{
     body{background:#fff;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
     .no-print{display:none !important;}
-    .sig-modal-backdrop{display:none !important;}
+    .sig-modal-backdrop, .export-modal-backdrop{display:none !important;}
+    /* 관리자 화면에서 "선택/전체 인쇄"를 누르면 개별 보고서 시트를 담은
+       #print-all-root를 body에 새로 붙여 넣고 인쇄하는데, 정작 그 뒤에 있던
+       관리자 목록(표·필터·통계)을 인쇄용으로 숨기는 규칙이 빠져 있어서 목록
+       화면까지 같이 인쇄되던 문제가 있었다 — 목록은 숨기고 시트만 보이게 한다. */
+    body.printing-all main{display:none !important;}
+    body.printing-all #print-all-root{display:block !important;}
     main{padding:0;display:block;}
     .shell{max-width:none;}
     .sheet{box-shadow:none;border:none;border-radius:0;padding:0;}
@@ -834,7 +851,7 @@ async function renderAdminInto(root){
       <div class="title">관리자 대시보드 <span class="mono">등록된 점검 보고서 전체 관리</span></div>
       <div class="btns">
         <button class="btn" id="btn-print-all">🖨 전체 인쇄/PDF</button>
-        <button class="btn" id="btn-zip">🗜 ZIP 압축 다운로드</button>
+        <button class="btn" id="btn-zip">🗜 전체 내보내기</button>
         <button class="btn" id="btn-export">⬇ CSV 내보내기</button>
         <button class="btn" id="btn-refresh">↻ 새로고침</button>
       </div>
@@ -853,7 +870,7 @@ async function renderAdminInto(root){
         <div class="title" id="selected-count" style="font-size:12.5px;color:var(--ink-soft);">0건 선택됨</div>
         <div class="btns">
           <button class="btn" id="btn-print-selected">🖨 선택 인쇄/PDF</button>
-          <button class="btn" id="btn-zip-selected">🗜 선택 압축 다운로드</button>
+          <button class="btn" id="btn-zip-selected">🗜 선택 내보내기</button>
         </div>
       </div>
       <div id="list-wrap"></div>
@@ -862,7 +879,11 @@ async function renderAdminInto(root){
   document.getElementById('btn-refresh').onclick = async ()=>{ await loadRecords(); renderAdminList(); renderStats(); };
   document.getElementById('btn-export').onclick = exportCSV;
   document.getElementById('btn-print-all').onclick = ()=>printRecords(getFilteredRecords());
-  document.getElementById('btn-zip').onclick = ()=>exportZip(getFilteredRecords(), `AS_안전점검_모음_${todayStr()}.zip`);
+  document.getElementById('btn-zip').onclick = ()=>{
+    const rows = getFilteredRecords();
+    if(rows.length===0){ toast("내보낼 내역이 없습니다."); return; }
+    openExportFormatModal(rows, `AS_안전점검_모음_${todayStr()}`);
+  };
   document.getElementById('btn-print-selected').onclick = ()=>{
     const rows = state.records.filter(r=>state.selectedIds.has(r.id));
     if(rows.length===0){ toast("선택된 보고서가 없습니다. 목록에서 체크해 주세요."); return; }
@@ -871,7 +892,7 @@ async function renderAdminInto(root){
   document.getElementById('btn-zip-selected').onclick = ()=>{
     const rows = state.records.filter(r=>state.selectedIds.has(r.id));
     if(rows.length===0){ toast("선택된 보고서가 없습니다. 목록에서 체크해 주세요."); return; }
-    exportZip(rows, `AS_안전점검_선택${rows.length}건_${todayStr()}.zip`);
+    openExportFormatModal(rows, `AS_안전점검_선택${rows.length}건_${todayStr()}`);
   };
   ['f-q','f-branch','f-from','f-to'].forEach(id=>{
     document.getElementById(id).addEventListener('input', ()=>{
@@ -956,12 +977,121 @@ function buildStaticDocument(f){
   const body = sheetOuterHTML(f, 'disabled');
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
 <title>${esc(f.companyName||'AS 안전점검')} ${esc(f.inspectDate||'')}</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>${styleText}
 body{background:#fff;padding:16px;}
 .sheet{box-shadow:none;border:1px solid #c7d1cf;max-width:900px;margin:0 auto;}
 </style></head><body>
 <div class="sheet">${body}</div>
 </body></html>`;
+}
+
+/* ============================================================
+   PDF 내보내기 (html2canvas + jsPDF)
+   ------------------------------------------------------------
+   window.print()는 항상 브라우저 인쇄창을 거쳐야 해서 스크립트로 바로
+   다운로드용 PDF 파일(Blob)을 만들 수 없다 — 그래서 각 보고서를 화면
+   밖(-99999px)의 숨은 iframe에 print-ready HTML(buildStaticDocument)로
+   그려 넣고, 그 iframe 안에서만 인쇄용 CSS(@media print)가 화면에도
+   똑같이 적용되도록("@media print" → "@media print, screen") 살짝
+   바꿔치기한 뒤, html2canvas로 캡처해서 jsPDF에 이미지로 붙인다. 이렇게
+   하면 실제 인쇄했을 때와 똑같은 압축된 레이아웃 그대로 PDF가 만들어진다.
+   ============================================================ */
+async function renderRecordCanvas(record){
+  const printReadyHtml = buildStaticDocument(record).replace(/@media print/g, '@media print, screen');
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-99999px;top:0;width:793px;height:1123px;border:0;';
+  document.body.appendChild(iframe);
+  await new Promise(resolve=>{
+    iframe.onload = resolve;
+    iframe.srcdoc = printReadyHtml;
+  });
+  const idoc = iframe.contentDocument;
+  // html2canvas는 <select>의 네이티브 렌더링을 제대로 캡처하지 못해(빈 칸이나
+  // 깨진 화살표로 나옴) 관리지사 드롭다운이 이상하게 찍힌다 — 캡처 직전에
+  // select를 선택된 값 그대로의 일반 텍스트로 바꿔치기한다(어차피 읽기전용).
+  idoc.querySelectorAll('select').forEach(sel=>{
+    const span = idoc.createElement('span');
+    span.textContent = sel.value || '';
+    sel.replaceWith(span);
+  });
+  try{ await iframe.contentWindow.document.fonts.ready; }catch(e){}
+  await new Promise(r=>setTimeout(r, 200));
+  const canvas = await html2canvas(idoc.body, {scale:2, backgroundColor:'#ffffff', windowWidth:793});
+  document.body.removeChild(iframe);
+  return canvas;
+}
+
+function addCanvasAsPage(pdf, canvas, isFirstPage){
+  const pageWmm = 210, pageHmm = 297;
+  let imgHmm = canvas.height / canvas.width * pageWmm;
+  if(imgHmm > pageHmm) imgHmm = pageHmm; // 내용이 살짝 넘치면 잘리는 대신 페이지 안에 눌러 맞춘다
+  if(!isFirstPage) pdf.addPage();
+  pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, pageWmm, imgHmm);
+}
+
+function pdfLibsReady(){
+  return typeof html2canvas !== 'undefined' && window.jspdf && window.jspdf.jsPDF;
+}
+
+async function exportZipPdfEach(rows, filename){
+  if(!pdfLibsReady() || typeof JSZip === 'undefined'){ toast("PDF 변환 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."); return; }
+  toast(`${rows.length}건을 PDF로 변환하는 중입니다... 잠시만 기다려 주세요.`);
+  const { jsPDF } = window.jspdf;
+  const zip = new JSZip();
+  const used = {};
+  for(const r of rows){
+    const canvas = await renderRecordCanvas(r);
+    const pdf = new jsPDF({unit:'mm', format:'a4'});
+    addCanvasAsPage(pdf, canvas, true);
+    let base = safeFileName(`${r.inspectDate}_${r.branch||''}_${r.companyName||'점검'}`);
+    if(used[base]!=null){ used[base]++; base += '_'+used[base]; } else used[base]=0;
+    zip.file(`${base}.pdf`, pdf.output('blob'));
+  }
+  zip.file(`제출내역_${todayStr()}.csv`, csvContentFor(rows));
+  const blob = await zip.generateAsync({type:'blob'});
+  downloadBlob(blob, filename);
+  toast("PDF 압축파일 다운로드가 시작되었습니다.");
+}
+
+async function exportCombinedPdf(rows, filename){
+  if(!pdfLibsReady()){ toast("PDF 변환 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."); return; }
+  toast(`${rows.length}건을 하나의 PDF로 합치는 중입니다... 잠시만 기다려 주세요.`);
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({unit:'mm', format:'a4'});
+  for(let i=0;i<rows.length;i++){
+    const canvas = await renderRecordCanvas(rows[i]);
+    addCanvasAsPage(pdf, canvas, i===0);
+  }
+  downloadBlob(pdf.output('blob'), filename);
+  toast("PDF 다운로드가 시작되었습니다.");
+}
+
+function openExportFormatModal(rows, baseName){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'export-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="export-modal">
+      <h3>내보내기 형식 선택</h3>
+      <div class="hint">${rows.length}건을 어떤 형식으로 내보낼까요?</div>
+      <button type="button" class="opt" data-fmt="html">HTML 파일 (ZIP 압축)<span class="sub">각 보고서를 개별 HTML 파일로, 압축해서 다운로드</span></button>
+      <button type="button" class="opt" data-fmt="pdf-each">PDF 파일 - 개별 (ZIP 압축)<span class="sub">각 보고서를 개별 PDF 파일로 만들어 압축해서 다운로드</span></button>
+      <button type="button" class="opt" data-fmt="pdf-all">PDF 파일 - 전체 하나로 합침<span class="sub">모든 보고서를 한 PDF 파일 안에 페이지별로 합쳐서 다운로드</span></button>
+      <button type="button" class="cancel" data-cancel>취소</button>
+    </div>`;
+  document.body.appendChild(backdrop);
+  const close = ()=>{ if(backdrop.parentNode) document.body.removeChild(backdrop); };
+  backdrop.querySelector('[data-cancel]').onclick = close;
+  backdrop.addEventListener('click', (e)=>{ if(e.target === backdrop) close(); });
+  backdrop.querySelectorAll('[data-fmt]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const fmt = btn.getAttribute('data-fmt');
+      close();
+      if(fmt === 'html') exportZip(rows, `${baseName}.zip`);
+      else if(fmt === 'pdf-each') exportZipPdfEach(rows, `${baseName}.zip`);
+      else if(fmt === 'pdf-all') exportCombinedPdf(rows, `${baseName}.pdf`);
+    };
+  });
 }
 
 async function exportZip(rows, filename){
