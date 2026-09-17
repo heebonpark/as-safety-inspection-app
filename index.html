@@ -932,6 +932,11 @@ async function renderAdminInto(root){
         <button class="btn" id="btn-print-all">🖨 전체 인쇄/PDF</button>
         <button class="btn" id="btn-zip">🗜 전체 내보내기</button>
         <button class="btn" id="btn-export">⬇ CSV 내보내기</button>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--ink-soft);">
+          사진 크기
+          <input type="number" id="photo-xlsx-size" value="${getPhotoXlsxSizeCm()}" min="1" max="15" step="0.1" style="width:52px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;">
+          cm
+        </label>
         <button class="btn" id="btn-export-photo-xlsx">📷 사진포함 엑셀</button>
         <button class="btn" id="btn-refresh">↻ 새로고침</button>
       </div>
@@ -960,7 +965,16 @@ async function renderAdminInto(root){
   document.getElementById('btn-daily-report').onclick = openDailyReportModal;
   document.getElementById('btn-vendor-manage').onclick = openVendorManagerModal;
   document.getElementById('btn-export').onclick = exportCSV;
-  document.getElementById('btn-export-photo-xlsx').onclick = ()=>exportPhotoExcel(getFilteredRecords());
+  document.getElementById('btn-export-photo-xlsx').onclick = ()=>{
+    const input = document.getElementById('photo-xlsx-size');
+    let cm = parseFloat(input.value);
+    if(!(cm > 0 && cm <= 15)){
+      toast("사진 크기는 1~15cm 사이로 입력해 주세요.");
+      return;
+    }
+    setPhotoXlsxSizeCm(cm);
+    exportPhotoExcel(getFilteredRecords(), cm);
+  };
   document.getElementById('btn-print-all').onclick = ()=>printRecords(getFilteredRecords());
   document.getElementById('btn-zip').onclick = ()=>{
     const rows = getFilteredRecords();
@@ -1032,16 +1046,31 @@ function exportCSV(){
   downloadBlob(new Blob([csvContentFor(rows)], {type:'text/csv;charset=utf-8;'}), `AS_안전점검_${todayStr()}.csv`);
 }
 
-/* 사진 포함 엑셀 — 등록된 보고서를 한 줄에 한 건씩, 현장사진 4장을 각 3.7x3.7cm 크기로
-   썸네일로 셀에 바로 박아 넣어 스크롤만으로 여러 건을 한눈에 훑어볼 수 있게 한다.
-   CSV는 이미지를 못 담으므로(텍스트 전용) 이 내보내기만 ExcelJS를 쓴다. 사진은
-   compressImageFile()에서 이미 JPEG·최대 720px·260KB 이하로 줄여 저장되므로
-   추가 리사이즈 없이 원본 dataUrl을 그대로 셀 크기(3.7x3.7cm)에 맞춰 넣기만 하면 된다. */
+/* 사진 포함 엑셀 — 등록된 보고서를 한 줄에 한 건씩, 현장사진 4장을 썸네일로 셀에
+   바로 박아 넣어 스크롤만으로 여러 건을 한눈에 훑어볼 수 있게 한다. CSV는 이미지를
+   못 담으므로(텍스트 전용) 이 내보내기만 ExcelJS를 쓴다. 사진은 compressImageFile()
+   에서 이미 JPEG·최대 720px·260KB 이하로 줄여 저장되므로 추가 리사이즈 없이 원본
+   dataUrl을 그대로 셀 크기에 맞춰 넣기만 하면 된다.
+   사진 크기(cm)는 사용자가 직접 조절 가능 — 기기별 화면 설정이라 Firestore가 아니라
+   이 브라우저의 localStorage에만 저장, 다음에 열어도 마지막 쓴 값이 그대로 남는다. */
 const PHOTO_XLSX_HEADERS = ["사진1(안전모)","사진2(사다리)","사진3(안전고리)","사진4(작업중)"];
-async function exportPhotoExcel(rows){
+const PHOTO_XLSX_SIZE_DEFAULT_CM = 3.7;
+function getPhotoXlsxSizeCm(){
+  try{
+    const v = parseFloat(localStorage.getItem('asPhotoXlsxSizeCm'));
+    return (v && v > 0) ? v : PHOTO_XLSX_SIZE_DEFAULT_CM;
+  }catch(e){ return PHOTO_XLSX_SIZE_DEFAULT_CM; }
+}
+function setPhotoXlsxSizeCm(cm){
+  try{ localStorage.setItem('asPhotoXlsxSizeCm', String(cm)); }catch(e){}
+}
+async function exportPhotoExcel(rows, sizeCm){
   if(rows.length===0){ toast("내보낼 내역이 없습니다."); return; }
   if(typeof ExcelJS === 'undefined'){ toast("엑셀 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."); return; }
-  toast(`${rows.length}건의 사진을 포함해 엑셀을 만드는 중입니다... 잠시만 기다려 주세요.`);
+  // 범위를 벗어나거나 숫자가 아닌 값이 들어오면(빈칸, 오타 등) 조용히 기본값으로
+  // 대체한다 — 크기 하나 잘못 입력했다고 내보내기 자체가 막히면 안 되므로.
+  const cm = (typeof sizeCm === 'number' && sizeCm > 0 && sizeCm <= 15) ? sizeCm : PHOTO_XLSX_SIZE_DEFAULT_CM;
+  toast(`${rows.length}건의 사진(${cm}cm)을 포함해 엑셀을 만드는 중입니다... 잠시만 기다려 주세요.`);
   // toast()는 CSS 트랜지션이라 실제로 화면에 그려질 시간을 한 틱 줘야, 무거운 이미지
   // 삽입 루프가 시작되기 전에 사용자에게 "처리 중" 문구가 먼저 보인다.
   await new Promise(r=>setTimeout(r, 30));
@@ -1056,7 +1085,7 @@ async function exportPhotoExcel(rows){
   headerRow.alignment = { horizontal:'center', vertical:'middle' };
 
   const PHOTO_COL_START = header.length - PHOTO_XLSX_HEADERS.length + 1; // 1-based
-  const THUMB_PX = 139.84; // 3.7cm ≈ 139.84px (96dpi 기준: 3.7cm/2.54 * 96)
+  const THUMB_PX = cm / 2.54 * 96; // cm -> px (96dpi 기준)
 
   rows.forEach((r, i)=>{
     const hasBad = (r.checklist||[]).some(x=>x.result==='bad');
