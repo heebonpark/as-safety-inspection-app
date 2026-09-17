@@ -764,6 +764,7 @@ function renderFormInto(root, opts){
         </label>
         ${fromAdmin ? `<button class="btn" id="btn-back-admin">← 목록으로</button>` : (state.role==='inspector' ? `<button class="btn" id="btn-my-list">📋 내가 등록한 보고서</button>` : '')}
         <button class="btn" id="btn-print">🖨 인쇄/PDF</button>
+        <button class="btn" id="btn-pdf-direct">📄 바로 PDF 저장</button>
         ${!readOnly ? `<button class="btn solid" id="btn-submit">${state.editingRecordId ? '수정 저장' : '제출'}</button>` : ''}
       </div>
     </div>
@@ -781,6 +782,14 @@ function renderFormInto(root, opts){
       toast("인쇄를 여는 중 오류가 발생했습니다: " + (e && e.message ? e.message : e));
     }
   };
+
+  const btnPdfDirect = document.getElementById('btn-pdf-direct');
+  if(btnPdfDirect){
+    btnPdfDirect.onclick = ()=>{
+      if(typeof exportZipPdfSingle === 'undefined') { toast("PDF 변환 준비 중입니다."); return; }
+      exportZipPdfSingle([f], `점검보고서_${f.inspectDate||''}_${f.branch||''}_${f.companyName||''}.pdf`);
+    };
+  }
   document.getElementById('chk-meta-footer').onchange = (e)=>{
     setMetaFooterVisible(e.target.checked);
     renderSheet(document.getElementById('sheet'), f, readOnly);
