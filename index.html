@@ -1456,14 +1456,15 @@ async function renderRecordCanvas(record){
   // html2canvas는 <select>의 네이티브 렌더링을 제대로 캡처하지 못해(빈 칸이나
   // 깨진 화살표로 나옴) 관리지사 드롭다운이 이상하게 찍힌다 — 캡처 직전에
   // select를 선택된 값 그대로의 일반 텍스트로 바꿔치기한다(어차피 읽기전용).
-  idoc.querySelectorAll('select').forEach(sel=>{
+  idoc.querySelectorAll('select, input:not([type="radio"]):not([type="checkbox"]), textarea').forEach(el=>{
     const span = idoc.createElement('span');
-    span.textContent = sel.value || '';
-    sel.replaceWith(span);
+    span.style.cssText = 'display:inline-block; width:100%; word-break:break-all; white-space:pre-wrap; font-family:inherit; font-size:inherit; color:inherit;';
+    span.textContent = el.value || '';
+    el.replaceWith(span);
   });
   try{ await iframe.contentWindow.document.fonts.ready; }catch(e){}
   await new Promise(r=>setTimeout(r, 200));
-  const canvas = await html2canvas(idoc.body, {scale:2, backgroundColor:'#ffffff', windowWidth:793});
+  const canvas = await html2canvas(idoc.body, {scale:4, backgroundColor:'#ffffff', windowWidth:793});
   document.body.removeChild(iframe);
   return canvas;
 }
@@ -1473,7 +1474,7 @@ function addCanvasAsPage(pdf, canvas, isFirstPage){
   let imgHmm = canvas.height / canvas.width * pageWmm;
   if(imgHmm > pageHmm) imgHmm = pageHmm; // 내용이 살짝 넘치면 잘리는 대신 페이지 안에 눌러 맞춘다
   if(!isFirstPage) pdf.addPage();
-  pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, pageWmm, imgHmm);
+  pdf.addImage(canvas.toDataURL('image/jpeg', 1.0), 'JPEG', 0, 0, pageWmm, imgHmm);
 }
 
 function pdfLibsReady(){
