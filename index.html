@@ -105,6 +105,9 @@
   table.grid td select{width:100%;font-size:13px;font-family:inherit;color:var(--ink);padding:3px 2px;background:transparent;}
   table.grid td select:disabled{-webkit-appearance:none;-moz-appearance:none;appearance:none;border:none;background:transparent;opacity:1;-webkit-text-fill-color:var(--ink);padding:3px 2px;}
   table.check td.action input:disabled::placeholder{color:transparent;}
+  table.grid td.radiocell{display:flex;gap:10px;align-items:center;}
+  table.grid td.radiocell label{display:flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;color:var(--ink-soft);white-space:nowrap;}
+  table.grid td.radiocell input{accent-color:var(--brand-deep);width:13px;height:13px;}
 
   .section-label{font-size:12.5px;font-weight:900;color:#fff;background:var(--brand-deep);padding:6px 10px;border-radius:6px 6px 0 0;display:inline-block;margin-bottom:0;}
 
@@ -229,6 +232,9 @@
     .sheet h2.formtitle{font-size:19px;margin:0 0 5px;}
     .section-label{font-size:10.5px;padding:3px 8px;margin-top:5px;}
     table.grid th, table.grid td{font-size:10px;padding:3px 6px;}
+    table.grid td.radiocell{gap:6px;}
+    table.grid td.radiocell label{font-size:9px;gap:2px;}
+    table.grid td.radiocell input{width:10px;height:10px;}
     .ins-mark{width:26px;height:20px;}
     .ins-mark img.sig-stamp-img{width:26px;height:20px;}
     table.check th, table.check td{font-size:9.5px;padding:3px 5px;line-height:1.2;}
@@ -238,7 +244,7 @@
     .photo-caption{font-size:9px !important;padding:2px !important;}
     .photo-cell{padding:5px;gap:3px;}
     .photo-cell .plabel{font-size:9px;}
-    .photo-box{aspect-ratio:auto !important;height:60mm !important;}
+    .photo-box{aspect-ratio:auto !important;height:52mm !important;}
     .remarks-box{padding:5px 8px;margin-bottom:6px;}
     textarea.wide{min-height:16mm;font-size:9.5px;padding:0;}
     .meta-footer{font-size:8px;margin-top:2px;}
@@ -298,7 +304,10 @@ const INSPECTOR_DEFAULTS = {
   "강릉": "고한일",
   "원주": "원준식",
 };
-const COMPANIES = ["비즈메이드","지앤씨씨","범무시스템","코리아이지텔","엠지브이보안시스템"];
+const DEFAULT_VENDOR_NAMES = ["비즈메이드","지앤씨씨","범무시스템","코리아이지텔","엠지브이보안시스템"];
+const VISIT_TYPES = ["현장","영상"];
+const CASE_TYPES = ["AS","공사현장"];
+const POSITION_BY_BRANCH = (branch)=> branch==="강북/강원" ? "본부장" : "지사장";
 const ADMIN_PASSWORD = "0303";
 const DEFAULT_HQ = "강북강원본부";
 
@@ -384,6 +393,7 @@ const state = {
   records: [],
   adminFilter: { q:"", branch:"", from:"", to:"" },
   selectedIds: new Set(),
+  vendors: [], // [{name, teams:[...]}] — 협력사/공사팀, 관리자가 등록/수정
 };
 
 function blankForm(prefill){
@@ -399,8 +409,11 @@ function blankForm(prefill){
     inspectorSig: "",
     contractNo: "",
     companyName: "",
-    siteAddress: "",
+    vendor: "",
     teamName: "",
+    visitType: "",
+    caseType: "",
+    siteAddress: "",
     workerName: "",
     checklist: CHECK_ITEMS.map(x=>({k:x.k, result:"", note:"", photo:""})),
     remarks: "",
@@ -411,6 +424,21 @@ function blankForm(prefill){
 async function loadRecords(){
   const items = await sListValues("record:");
   state.records = items.filter(Boolean).map(v=>JSON.parse(v)).sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
+}
+
+async function loadVendors(){
+  const raw = await sGet("config:vendors");
+  if(raw){
+    try{ const parsed = JSON.parse(raw); if(Array.isArray(parsed)) return parsed; }catch(e){}
+  }
+  return DEFAULT_VENDOR_NAMES.map(name=>({name, teams:[]}));
+}
+async function saveVendors(){
+  await sSet("config:vendors", JSON.stringify(state.vendors));
+}
+function findVendorTeams(vendorName){
+  const v = state.vendors.find(x=>x.name===vendorName);
+  return v ? v.teams : [];
 }
 
 function render(){
@@ -634,8 +662,20 @@ function sheetOuterHTML(f, dis){
         <th>계약번호</th><td><input type="text" data-field="contractNo" value="${esc(f.contractNo)}" ${dis}></td>
       </tr>
       <tr>
-        <th class="req">상호(협력사)</th><td colspan="2">${selectHTML('companyName', COMPANIES, f.companyName, dis)}</td>
-        <th>협력사 팀명</th><td colspan="2"><input type="text" data-field="teamName" value="${esc(f.teamName)}" placeholder="예) 주식회사비즈메이드(강북)_3팀" ${dis}></td>
+        <th class="req">상호</th><td colspan="2"><input type="text" data-field="companyName" value="${esc(f.companyName)}" placeholder="예) ㈜파컬렉티브" ${dis}></td>
+        <th class="req">협력사 팀명</th><td colspan="2">
+          <input type="text" data-field="teamName" value="${esc(f.teamName)}" placeholder="예) 비즈메이드(강북) 3팀" list="teamlist-${f.id}" ${dis}>
+          <datalist id="teamlist-${f.id}">${findVendorTeams(f.vendor).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+        </td>
+      </tr>
+      <tr>
+        <th class="req">협력사</th><td>${selectHTML('vendor', state.vendors.map(v=>v.name), f.vendor, dis)}</td>
+        <th class="req">점검방식</th><td class="radiocell">
+          ${VISIT_TYPES.map(t=>`<label><input type="radio" name="visitType-${f.id}" value="${t}" data-radio-field="visitType" ${f.visitType===t?'checked':''} ${dis}> ${t==='현장'?'방문(현장)':'영상통화'}</label>`).join("")}
+        </td>
+        <th class="req">구분</th><td class="radiocell">
+          ${CASE_TYPES.map(t=>`<label><input type="radio" name="caseType-${f.id}" value="${t}" data-radio-field="caseType" ${f.caseType===t?'checked':''} ${dis}> ${t}</label>`).join("")}
+        </td>
       </tr>
       <tr>
         <th class="req">현장주소</th><td colspan="3"><input type="text" data-field="siteAddress" value="${esc(f.siteAddress)}" placeholder="예) 서울 마포구 중동 362, 2층" ${dis}></td>
@@ -785,6 +825,9 @@ function bindFormInputs(el, f, readOnly){
     inp.addEventListener('input', ()=>{ f[inp.getAttribute('data-field')] = inp.value; });
     inp.addEventListener('change', ()=>{ f[inp.getAttribute('data-field')] = inp.value; });
   });
+  el.querySelectorAll('[data-radio-field]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{ f[inp.getAttribute('data-radio-field')] = inp.value; });
+  });
   if(readOnly) return;
   const branchSel = el.querySelector('[data-field="branch"]');
   const nameInp = el.querySelector('[data-field="inspectorName"]');
@@ -793,6 +836,13 @@ function bindFormInputs(el, f, readOnly){
       const def = INSPECTOR_DEFAULTS[branchSel.value];
       const isUntouched = !nameInp.value || Object.values(INSPECTOR_DEFAULTS).includes(nameInp.value);
       if(def && isUntouched){ nameInp.value = def; f.inspectorName = def; }
+    });
+  }
+  const vendorSel = el.querySelector('[data-field="vendor"]');
+  const teamList = el.querySelector(`datalist[id="teamlist-${f.id}"]`);
+  if(vendorSel && teamList){
+    vendorSel.addEventListener('change', ()=>{
+      teamList.innerHTML = findVendorTeams(vendorSel.value).map(t=>`<option value="${esc(t)}">`).join("");
     });
   }
   el.querySelectorAll('[data-ck-result]').forEach(inp=>{
@@ -825,7 +875,11 @@ function bindFormInputs(el, f, readOnly){
 async function submitForm(){
   const f = state.currentForm;
   if(!f.branch){ toast("관리지사를 선택해 주세요."); return; }
-  if(!f.companyName){ toast("상호(협력사)를 입력해 주세요."); return; }
+  if(!f.companyName){ toast("상호를 입력해 주세요."); return; }
+  if(!f.vendor){ toast("협력사를 선택해 주세요."); return; }
+  if(!f.teamName){ toast("협력사 팀명을 입력해 주세요."); return; }
+  if(!f.visitType){ toast("점검방식(방문/영상통화)을 선택해 주세요."); return; }
+  if(!f.caseType){ toast("구분(AS/공사현장)을 선택해 주세요."); return; }
   if(!f.siteAddress){ toast("현장주소를 입력해 주세요."); return; }
   const isEdit = !!state.editingRecordId;
   if(isEdit) f.updatedAt = new Date().toISOString();
@@ -850,6 +904,8 @@ async function renderAdminInto(root){
     <div class="actionbar no-print">
       <div class="title">관리자 대시보드 <span class="mono">등록된 점검 보고서 전체 관리</span></div>
       <div class="btns">
+        <button class="btn" id="btn-daily-report">📋 일일 집계 보고</button>
+        <button class="btn" id="btn-vendor-manage">🏢 협력사·공사팀 관리</button>
         <button class="btn" id="btn-print-all">🖨 전체 인쇄/PDF</button>
         <button class="btn" id="btn-zip">🗜 전체 내보내기</button>
         <button class="btn" id="btn-export">⬇ CSV 내보내기</button>
@@ -877,6 +933,8 @@ async function renderAdminInto(root){
     </div>
   `;
   document.getElementById('btn-refresh').onclick = async ()=>{ await loadRecords(); renderAdminList(); renderStats(); };
+  document.getElementById('btn-daily-report').onclick = openDailyReportModal;
+  document.getElementById('btn-vendor-manage').onclick = openVendorManagerModal;
   document.getElementById('btn-export').onclick = exportCSV;
   document.getElementById('btn-print-all').onclick = ()=>printRecords(getFilteredRecords());
   document.getElementById('btn-zip').onclick = ()=>{
@@ -924,11 +982,11 @@ function getFilteredRecords(){
 }
 
 function csvContentFor(rows){
-  const header = ["점검일자","관리지사","점검자","상호","협력사팀명","현장주소","작업자명","계약번호","미흡항목수","제출시각"];
+  const header = ["점검일자","관리지사","점검자","직책","계약번호","상호","협력사","협력사팀명","작업자명","구분","방식","현장주소","점검결과","제출시각"];
   const lines = [header.join(",")];
   rows.forEach(r=>{
-    const badCount = (r.checklist||[]).filter(x=>x.result==='bad').length;
-    const cells = [r.inspectDate, r.branch, r.inspectorName||"", r.companyName, r.teamName||"", r.siteAddress, r.workerName||"", r.contractNo||"", badCount, new Date(r.createdAt).toLocaleString('ko-KR')];
+    const hasBad = (r.checklist||[]).some(x=>x.result==='bad');
+    const cells = [r.inspectDate, r.branch, r.inspectorName||"", POSITION_BY_BRANCH(r.branch), r.contractNo||"", r.companyName, r.vendor||"", r.teamName||"", r.workerName||"", r.caseType||"", r.visitType||"", r.siteAddress, hasBad?"미흡":"양호", new Date(r.createdAt).toLocaleString('ko-KR')];
     lines.push(cells.map(c => `"${String(c==null?"":c).replace(/"/g,'""')}"`).join(","));
   });
   return "﻿" + lines.join("\r\n");
@@ -1094,6 +1152,214 @@ function openExportFormatModal(rows, baseName){
   });
 }
 
+/* ============================================================
+   일일 집계 보고 — 관리본부 사업지원팀이 매일 메일로 보내는 집계표를
+   그대로 만들어 준다. 표는 이메일 편집기(KT 그룹메일 등)가 그대로
+   붙여넣기 받아들일 수 있도록 인라인 style로만 구성한다(<style> 태그나
+   외부 CSS는 메일 클라이언트에서 대부분 제거되기 때문).
+   ============================================================ */
+function dailyReportHeaders(){
+  return ["날짜","관리지사","점검자","직책","계약번호","상호","협력사","협력사팀명","작업자명","구분","방식","결과"];
+}
+function dailyReportRowCells(r){
+  const hasBad = (r.checklist||[]).some(x=>x.result==='bad');
+  return [r.inspectDate, r.branch, r.inspectorName||"", POSITION_BY_BRANCH(r.branch), r.contractNo||"", r.companyName||"", r.vendor||"", r.teamName||"", r.workerName||"", r.caseType||"", r.visitType||"", hasBad?"미흡":"양호"];
+}
+function buildDailyReportHtmlTable(rows){
+  const thStyle = "border:1px solid #333;background:#0a3b45;color:#fff;padding:6px 8px;font-size:12px;white-space:nowrap;font-family:'Malgun Gothic',Arial,sans-serif;";
+  const tdStyle = "border:1px solid #333;padding:6px 8px;font-size:12px;font-family:'Malgun Gothic',Arial,sans-serif;";
+  const headRow = `<tr>${dailyReportHeaders().map(h=>`<th style="${thStyle}">${esc(h)}</th>`).join("")}</tr>`;
+  const bodyRows = rows.map(r=>`<tr>${dailyReportRowCells(r).map(c=>`<td style="${tdStyle}">${esc(c)}</td>`).join("")}</tr>`).join("");
+  return `<table style="border-collapse:collapse;">${headRow}${bodyRows}</table>`;
+}
+
+function openDailyReportModal(){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'export-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="export-modal" style="max-width:960px;">
+      <h3>일일 집계 보고</h3>
+      <div class="hint">날짜별 제출 내역을 표로 모아 메일 본문에 바로 붙여넣을 수 있게 만듭니다.</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="date" id="report-date" value="${todayStr()}" style="padding:7px;border:1px solid var(--line);border-radius:6px;">
+        <button type="button" class="cancel" id="report-copy" style="width:auto;padding:8px 14px;">📋 클립보드 복사</button>
+        <button type="button" class="cancel" id="report-download" style="width:auto;padding:8px 14px;">⬇ HTML 다운로드</button>
+      </div>
+      <div id="report-preview" style="max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px;"></div>
+      <button type="button" class="cancel" data-cancel style="margin-top:10px;">닫기</button>
+    </div>`;
+  document.body.appendChild(backdrop);
+  const close = ()=>{ if(backdrop.parentNode) document.body.removeChild(backdrop); };
+  backdrop.querySelector('[data-cancel]').onclick = close;
+  backdrop.addEventListener('click', (e)=>{ if(e.target === backdrop) close(); });
+
+  const dateInp = backdrop.querySelector('#report-date');
+  const preview = backdrop.querySelector('#report-preview');
+  function rowsForDate(){
+    return state.records.filter(r=>r.inspectDate === dateInp.value).sort((a,b)=>(a.branch||"").localeCompare(b.branch||""));
+  }
+  function refresh(){
+    const rows = rowsForDate();
+    preview.innerHTML = rows.length ? buildDailyReportHtmlTable(rows) : `<div class="empty">해당 날짜 제출 내역이 없습니다.</div>`;
+  }
+  dateInp.addEventListener('change', refresh);
+  refresh();
+
+  backdrop.querySelector('#report-copy').onclick = async ()=>{
+    const rows = rowsForDate();
+    if(rows.length===0){ toast("해당 날짜에 내역이 없습니다."); return; }
+    const html = buildDailyReportHtmlTable(rows);
+    try{
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], {type:'text/html'}),
+          'text/plain': new Blob([preview.innerText], {type:'text/plain'}),
+        })
+      ]);
+      toast("표를 클립보드에 복사했습니다. 메일 편집기에 붙여넣기(Ctrl+V) 하세요.");
+    }catch(e){
+      console.error("클립보드 복사 실패", e);
+      toast("클립보드 복사에 실패했습니다. HTML 다운로드를 이용해 주세요.");
+    }
+  };
+  backdrop.querySelector('#report-download').onclick = ()=>{
+    const rows = rowsForDate();
+    if(rows.length===0){ toast("해당 날짜에 내역이 없습니다."); return; }
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${buildDailyReportHtmlTable(rows)}</body></html>`;
+    downloadBlob(new Blob([html], {type:'text/html'}), `일일집계_${dateInp.value}.html`);
+  };
+}
+
+/* ============================================================
+   협력사·공사팀 관리자 등록/수정/일괄업로드
+   ============================================================ */
+function parseCsv(text){
+  if(text.charCodeAt(0)===0xFEFF) text = text.slice(1);
+  const rows = [];
+  let i=0, field='', row=[], inQuotes=false;
+  while(i<text.length){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field+='"'; i+=2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+    if(c === '"'){ inQuotes = true; i++; continue; }
+    if(c === ','){ row.push(field); field=''; i++; continue; }
+    if(c === '\r'){ i++; continue; }
+    if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; i++; continue; }
+    field += c; i++;
+  }
+  row.push(field); rows.push(row);
+  return rows.filter(r=>!(r.length===1 && r[0]===''));
+}
+
+function openVendorManagerModal(){
+  const backdrop = document.createElement('div');
+  backdrop.className = 'export-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="export-modal" style="max-width:520px;">
+      <h3>협력사·공사팀 관리</h3>
+      <div class="hint">여기서 등록/수정한 목록이 점검 보고서 작성 화면의 협력사·공사팀 드롭다운/자동완성에 바로 반영됩니다.</div>
+      <div id="vendor-list" style="max-height:38vh;overflow:auto;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <input type="text" id="new-vendor-name" placeholder="새 협력사 이름" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;">
+        <button type="button" id="add-vendor-btn" style="padding:8px 12px;border-radius:6px;border:1px solid var(--line);background:#fff;font-weight:700;font-size:13px;">+ 추가</button>
+      </div>
+      <div class="hint" style="margin-top:2px;">일괄 업로드 형식: CSV, 컬럼 "협력사,공사팀명" (공사팀명은 비워도 됨)</div>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+        <button type="button" class="cancel" id="vendor-template" style="width:auto;padding:8px 12px;">⬇ 예시 파일 다운로드</button>
+        <label class="cancel" style="width:auto;padding:8px 12px;cursor:pointer;display:inline-block;">📤 CSV 일괄 업로드<input type="file" id="vendor-upload" accept=".csv" style="display:none;"></label>
+      </div>
+      <button type="button" class="cancel" data-cancel style="margin-top:12px;">닫기</button>
+    </div>`;
+  document.body.appendChild(backdrop);
+  const close = ()=>{ if(backdrop.parentNode) document.body.removeChild(backdrop); };
+  backdrop.querySelector('[data-cancel]').onclick = close;
+  backdrop.addEventListener('click', (e)=>{ if(e.target === backdrop) close(); });
+
+  const listEl = backdrop.querySelector('#vendor-list');
+  function renderList(){
+    listEl.innerHTML = state.vendors.map((v,vi)=>`
+      <div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <strong style="font-size:13px;">${esc(v.name)}</strong>
+          <button type="button" data-del-vendor="${vi}" style="border:none;background:transparent;color:var(--red);font-size:11px;cursor:pointer;">협력사 삭제</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+          ${v.teams.map((t,ti)=>`<span style="background:#f3f6f5;border-radius:14px;padding:3px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px;">${esc(t)}<button type="button" data-del-team="${vi}:${ti}" style="border:none;background:transparent;color:var(--ink-soft);cursor:pointer;font-size:11px;">×</button></span>`).join("") || '<span class="hint" style="margin:0;">등록된 공사팀 없음</span>'}
+        </div>
+        <div style="display:flex;gap:6px;">
+          <input type="text" data-team-input="${vi}" placeholder="공사팀 이름" style="flex:1;padding:6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">
+          <button type="button" data-add-team="${vi}" style="padding:6px 10px;border-radius:6px;border:1px solid var(--line);background:#fff;font-size:12px;">+ 팀 추가</button>
+        </div>
+      </div>
+    `).join("");
+    listEl.querySelectorAll('[data-del-vendor]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        state.vendors.splice(Number(btn.getAttribute('data-del-vendor')), 1);
+        await saveVendors(); renderList();
+      };
+    });
+    listEl.querySelectorAll('[data-del-team]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const [vi,ti] = btn.getAttribute('data-del-team').split(':').map(Number);
+        state.vendors[vi].teams.splice(ti,1);
+        await saveVendors(); renderList();
+      };
+    });
+    listEl.querySelectorAll('[data-add-team]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const vi = Number(btn.getAttribute('data-add-team'));
+        const inp = listEl.querySelector(`[data-team-input="${vi}"]`);
+        const name = inp.value.trim();
+        if(!name) return;
+        if(!state.vendors[vi].teams.includes(name)) state.vendors[vi].teams.push(name);
+        await saveVendors(); renderList();
+      };
+    });
+  }
+  renderList();
+
+  backdrop.querySelector('#add-vendor-btn').onclick = async ()=>{
+    const inp = backdrop.querySelector('#new-vendor-name');
+    const name = inp.value.trim();
+    if(!name) return;
+    if(state.vendors.some(v=>v.name===name)){ toast("이미 등록된 협력사입니다."); return; }
+    state.vendors.push({name, teams:[]});
+    inp.value = '';
+    await saveVendors(); renderList();
+  };
+
+  backdrop.querySelector('#vendor-template').onclick = ()=>{
+    const csv = "﻿협력사,공사팀명\r\n비즈메이드,비즈메이드(강북) 3팀\r\n비즈메이드,비즈메이드(강북) 6팀\r\n지앤씨씨,지앤씨씨(강원) 1팀\r\n";
+    downloadBlob(new Blob([csv], {type:'text/csv;charset=utf-8;'}), "협력사_공사팀_예시.csv");
+  };
+
+  backdrop.querySelector('#vendor-upload').addEventListener('change', async (e)=>{
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const text = await file.text();
+    const rows = parseCsv(text);
+    let addedVendors = 0, addedTeams = 0;
+    rows.forEach((cols, idx)=>{
+      if(idx===0 && /협력사/.test(cols[0]||'')) return; // 헤더 행 건너뜀
+      const vendorName = (cols[0]||'').trim();
+      const teamName = (cols[1]||'').trim();
+      if(!vendorName) return;
+      let v = state.vendors.find(x=>x.name===vendorName);
+      if(!v){ v = {name:vendorName, teams:[]}; state.vendors.push(v); addedVendors++; }
+      if(teamName && !v.teams.includes(teamName)){ v.teams.push(teamName); addedTeams++; }
+    });
+    await saveVendors();
+    renderList();
+    toast(`협력사 ${addedVendors}건, 공사팀 ${addedTeams}건이 추가되었습니다.`);
+    e.target.value = '';
+  });
+}
+
 async function exportZip(rows, filename){
   if(typeof JSZip === 'undefined'){ toast("압축 기능을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."); return; }
   if(rows.length===0){ toast("압축할 내역이 없습니다."); return; }
@@ -1204,7 +1470,10 @@ function updateSelectedCount(){
   if(el) el.textContent = `${state.selectedIds.size}건 선택됨`;
 }
 
-render();
+(async function boot(){
+  state.vendors = await loadVendors();
+  render();
+})();
 </script>
 </body>
 </html>
