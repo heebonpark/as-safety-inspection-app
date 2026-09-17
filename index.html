@@ -1032,11 +1032,11 @@ function exportCSV(){
   downloadBlob(new Blob([csvContentFor(rows)], {type:'text/csv;charset=utf-8;'}), `AS_안전점검_${todayStr()}.csv`);
 }
 
-/* 사진 포함 엑셀 — 등록된 보고서를 한 줄에 한 건씩, 현장사진 4장을 각 30x30px
+/* 사진 포함 엑셀 — 등록된 보고서를 한 줄에 한 건씩, 현장사진 4장을 각 3.7x3.7cm 크기로
    썸네일로 셀에 바로 박아 넣어 스크롤만으로 여러 건을 한눈에 훑어볼 수 있게 한다.
    CSV는 이미지를 못 담으므로(텍스트 전용) 이 내보내기만 ExcelJS를 쓴다. 사진은
    compressImageFile()에서 이미 JPEG·최대 720px·260KB 이하로 줄여 저장되므로
-   추가 리사이즈 없이 원본 dataUrl을 그대로 셀 크기(30x30)에 맞춰 넣기만 하면 된다. */
+   추가 리사이즈 없이 원본 dataUrl을 그대로 셀 크기(3.7x3.7cm)에 맞춰 넣기만 하면 된다. */
 const PHOTO_XLSX_HEADERS = ["사진1(안전모)","사진2(사다리)","사진3(안전고리)","사진4(작업중)"];
 async function exportPhotoExcel(rows){
   if(rows.length===0){ toast("내보낼 내역이 없습니다."); return; }
@@ -1056,7 +1056,7 @@ async function exportPhotoExcel(rows){
   headerRow.alignment = { horizontal:'center', vertical:'middle' };
 
   const PHOTO_COL_START = header.length - PHOTO_XLSX_HEADERS.length + 1; // 1-based
-  const THUMB_PX = 30;
+  const THUMB_PX = 139.84; // 3.7cm ≈ 139.84px (96dpi 기준: 3.7cm/2.54 * 96)
 
   rows.forEach((r, i)=>{
     const hasBad = (r.checklist||[]).some(x=>x.result==='bad');
@@ -1068,7 +1068,7 @@ async function exportPhotoExcel(rows){
     ];
     const excelRow = ws.addRow(rowVals);
     const rowNumber = excelRow.number;
-    excelRow.height = THUMB_PX * 0.75; // 포인트 단위(1px ≈ 0.75pt, 96dpi 기준) — 30px 이미지가 셀 높이에 딱 맞음
+    excelRow.height = THUMB_PX * 0.75; // 포인트 단위(1px ≈ 0.75pt, 96dpi 기준) — 이미지가 셀 높이에 딱 맞음
     excelRow.alignment = { vertical:'middle' };
 
     (r.checklist||[]).forEach((item, ci)=>{
@@ -1077,9 +1077,9 @@ async function exportPhotoExcel(rows){
       try{
         const base64 = item.photo.split(',')[1] || item.photo;
         const imgId = wb.addImage({ base64, extension:'jpeg' });
-        // tl(top-left)은 0-based 행/열이라 -1 보정. 셀 안에 딱 맞는 30x30 고정 크기로 얹는다
+        // tl(top-left)은 0-based 행/열이라 -1 보정. 셀 안에 딱 맞는 3.7x3.7cm(THUMB_PX) 고정 크기로 얹는다
         // (셀 크기에 맞춰 늘어나는 방식이 아니라 절대 픽셀 크기 오버레이라, 컬럼 폭·행 높이를
-        // 30px에 맞게 미리 지정해둬야 잘리거나 남는 여백 없이 깔끔하게 보인다).
+        // THUMB_PX 크기(3.7cm)에 맞게 미리 지정해둬야 잘리거나 남는 여백 없이 깔끔하게 보인다).
         ws.addImage(imgId, {
           tl: { col: PHOTO_COL_START - 1 + ci, row: rowNumber - 1 },
           ext: { width: THUMB_PX, height: THUMB_PX },
@@ -1088,10 +1088,10 @@ async function exportPhotoExcel(rows){
     });
   });
 
-  // 열 너비: 앞쪽 텍스트 열은 내용에 맞춰 적당히, 사진 열 4개는 30px(≈4.3 문자폭)에
+  // 열 너비: 앞쪽 텍스트 열은 내용에 맞춰 적당히, 사진 열 4개는 THUMB_PX(3.7cm)에
   // 맞춤. 현장주소·비고는 길어질 수 있어 조금 더 넓게 잡는다.
   const textWidths = [6, 11, 10, 9, 8, 11, 16, 12, 12, 10, 7, 7, 24, 8, 20, 16];
-  ws.columns = [...textWidths, ...PHOTO_XLSX_HEADERS.map(()=>4.3)].map(w=>({ width:w }));
+  ws.columns = [...textWidths, ...PHOTO_XLSX_HEADERS.map(()=>THUMB_PX/7)].map(w=>({ width:w }));
   ws.views = [{ state:'frozen', ySplit:1 }];
 
   const thin = { style:'thin', color:{argb:'FFB9C6C2'} };
