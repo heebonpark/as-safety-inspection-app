@@ -347,6 +347,19 @@ async function sDelete(key){
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
 function esc(s){ return (s||"").replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* 비고 아래 "작성자/지사 · 작성(수정)일시" 줄(.meta-footer)을 화면·인쇄·PDF/HTML
+   내보내기 어디서든 보이거나 안 보이게 하는 옵션. sheetOuterHTML() 한 곳에서만
+   읽으므로, printRecords()/buildStaticDocument() 등 그 함수를 재사용하는 모든
+   출력 경로에 자동으로 같이 반영된다. 기기별 화면 설정이라 데이터(Firestore)가
+   아니라 이 브라우저의 localStorage에만 저장한다.
+   보이는 게 기존 기본 동작이었으므로, 값이 없으면(처음 쓰는 사람) 항상 true. */
+function metaFooterVisible(){
+  try{ return localStorage.getItem('asHideMetaFooter') !== '1'; }
+  catch(e){ return true; }
+}
+function setMetaFooterVisible(visible){
+  try{ localStorage.setItem('asHideMetaFooter', visible ? '0' : '1'); }catch(e){}
+}
 function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -578,6 +591,9 @@ function renderFormInto(root, opts){
         <span class="mono">${esc(f.siteAddress || '')}</span>
       </div>
       <div class="btns">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-soft);cursor:pointer;">
+          <input type="checkbox" id="chk-meta-footer" ${metaFooterVisible()?'checked':''}> 작성자/작성일시 표시
+        </label>
         ${fromAdmin ? `<button class="btn" id="btn-back-admin">← 목록으로</button>` : (state.role==='inspector' ? `<button class="btn" id="btn-my-list">📋 내가 등록한 보고서</button>` : '')}
         <button class="btn" id="btn-print">🖨 인쇄/PDF</button>
         ${!readOnly ? `<button class="btn solid" id="btn-submit">${state.editingRecordId ? '수정 저장' : '제출'}</button>` : ''}
@@ -596,6 +612,10 @@ function renderFormInto(root, opts){
       console.error("인쇄 실패", e);
       toast("인쇄를 여는 중 오류가 발생했습니다: " + (e && e.message ? e.message : e));
     }
+  };
+  document.getElementById('chk-meta-footer').onchange = (e)=>{
+    setMetaFooterVisible(e.target.checked);
+    renderSheet(document.getElementById('sheet'), f, readOnly);
   };
   if(!readOnly){
     document.getElementById('btn-submit').onclick = submitForm;
@@ -712,10 +732,12 @@ function sheetOuterHTML(f, dis){
       <textarea class="wide" data-field="remarks" style="min-height:40px;" ${dis}>${esc(f.remarks)}</textarea>
     </div>
 
+    ${metaFooterVisible() ? `
     <div class="meta-footer">
       <span>${esc(f.inspectorName||'-')} / ${esc(f.branch||'-')}</span>
       <span>${f.updatedAt ? '수정' : '작성'}일시 ${new Date(f.updatedAt||f.createdAt).toLocaleString('ko-KR')}</span>
     </div>
+    ` : ''}
   `;
 }
 
