@@ -288,7 +288,6 @@
   }
 
   @media (max-width:720px){
-    table.check td.action, table.check th:nth-child(4){display:none;}
     table.grid colgroup{display:none;}
     table.grid, table.grid tr, table.grid th, table.grid td{display:block;width:100% !important;}
     table.grid{table-layout:auto;}
@@ -297,6 +296,18 @@
     table.grid th:first-child{margin-top:0;}
     table.grid td{border:none;padding:2px 10px 9px;overflow:visible;}
     table.grid td input, table.grid td select{width:100%;}
+    
+    table.check, table.check tbody, table.check tr, table.check th, table.check td { display: block; width: 100% !important; }
+    table.check { table-layout: auto; border:none; }
+    table.check tr:first-child { display: none; }
+    table.check tr { border: 1px solid var(--line) !important; border-radius: 8px; margin-bottom: 12px; overflow: hidden; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.03); }
+    table.check td { border: none !important; }
+    table.check td.gu { display: none; }
+    table.check td.item { font-size: 13px; font-weight: 700; background: #f3f6f5; padding: 10px 12px 6px; border-bottom: 1px solid var(--line-soft) !important; line-height: 1.4; color: var(--brand-deep); }
+    table.check td.result { padding: 10px 12px 4px; }
+    table.check td.action { padding: 0 12px 12px; }
+    table.check td.action input { font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--line-soft) !important; }
+    .result-opts { justify-content: flex-start; gap: 20px; }
   }
 </style>
 </head>
