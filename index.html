@@ -150,6 +150,9 @@
   td.sig-inline{display:flex;align-items:center;gap:4px;}
   td.sig-inline input{flex:1;min-width:0;}
   td.sig-inline .ins-mark{flex:none;color:var(--ink-soft);}
+  td.addr-inline{display:flex;align-items:center;gap:4px;}
+  td.addr-inline input{flex:1;min-width:0;}
+  .btn-map-link{flex:none;padding:7px 9px;border-radius:6px;border:1.5px solid var(--line);background:#fff;color:var(--ink);font-size:12px;cursor:pointer;white-space:nowrap;}
 
   textarea.wide{width:100%;min-height:44px;border:none;background:transparent;padding:0;font-size:12.8px;resize:vertical;}
   textarea.wide:focus{outline:none;}
@@ -955,7 +958,7 @@ function sheetOuterHTML(f, dis){
         </td>
       </tr>
       <tr>
-        <th class="req">현장주소</th><td colspan="3"><input type="text" data-field="siteAddress" value="${esc(f.siteAddress)}" placeholder="예) 서울 마포구 중동 362, 2층" ${dis}></td>
+        <th class="req">현장주소</th><td colspan="3" class="addr-inline"><input type="text" data-field="siteAddress" value="${esc(f.siteAddress)}" placeholder="예) 서울 마포구 중동 362, 2층" ${dis}><button type="button" class="btn-map-link no-print" data-map-link>🗺️ 지도</button></td>
         <th>작업자명</th><td><input type="text" data-field="workerName" value="${esc(f.workerName)}" ${dis}></td>
       </tr>
     </table>
@@ -1183,6 +1186,17 @@ function bindFormInputs(el, f, readOnly){
   });
   el.querySelectorAll('[data-radio-field]').forEach(inp=>{
     inp.addEventListener('change', ()=>{ f[inp.getAttribute('data-radio-field')] = inp.value; scheduleDraftSave(f); });
+  });
+  // 현장주소 옆 "🗺️ 지도" 버튼 — 이 앱 안에 지도를 새로 붙이는 대신 공개 카카오맵
+  // 검색으로 바로 연결한다. siteAddress 입력칸은 매 타이핑마다 화면을 다시 그리지
+  // 않으므로, 클릭하는 순간의 최신 입력값을 읽어서 연다(읽기전용일 때도 저장된
+  // 주소를 지도에서 볼 수 있어야 하므로 readOnly와 무관하게 항상 바인딩한다).
+  el.querySelectorAll('[data-map-link]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const addr = (el.querySelector('[data-field="siteAddress"]')?.value || f.siteAddress || '').trim();
+      if(!addr){ toast('현장주소를 먼저 입력해 주세요.'); return; }
+      window.open('https://map.kakao.com/link/search/' + encodeURIComponent(addr), '_blank');
+    };
   });
   if(readOnly) return;
   const branchSel = el.querySelector('[data-field="branch"]');
